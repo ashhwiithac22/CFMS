@@ -1,0 +1,85 @@
+const nodemailer = require('nodemailer');
+require('dotenv').config();
+
+let transporter = null;
+
+async function getTransporter() {
+  if (transporter) return transporter;
+
+  // If credentials are mock/default, create an Ethereal account dynamically for developer testing
+  if (process.env.EMAIL_USER === 'mock_user@ethereal.email') {
+    console.log('Generating dynamic Ethereal Mail credentials for testing...');
+    const testAccount = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    console.log(`Generated Ethereal Mail credentials: user = ${testAccount.user}`);
+    return transporter;
+  }
+
+  // Use configure from .env
+  transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT, 10) || 587,
+    secure: process.env.EMAIL_PORT === '465',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+  return transporter;
+}
+
+async function sendResetMail(email, token) {
+  try {
+    const client = await getTransporter();
+    const resetUrl = `http://localhost:5173/reset-password?token=${token}`;
+    
+    const mailOptions = {
+      from: '"Customer Feedback Support" <noreply@complaint.com>',
+      to: email,
+      subject: 'Password Reset Request',
+      text: `You requested a password reset. Click this link to reset your password: ${resetUrl}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+          <h2 style="color: #333;">Password Reset Request</h2>
+          <p>You requested a password reset for your Customer Feedback Management System account.</p>
+          <p>Please click the button below to reset your password. This link is valid for 1 hour.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" style="background-color: #3b82f6; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Reset Password</a>
+          </div>
+          <p>Or copy and paste this link in your browser:</p>
+          <p><a href="${resetUrl}" style="color: #3b82f6;">${resetUrl}</a></p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 12px; color: #777;">If you did not request this, please ignore this email.</p>
+        </div>
+      `,
+    };
+
+    const info = await client.sendMail(mailOptions);
+    console.log('Reset email successfully sent. Message ID:', info.messageId);
+    
+    // Generate and log the test message preview URL if using Ethereal
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    if (previewUrl) {
+      console.log('---------------------------------------------------------');
+      console.log('DEVELOPER RESET MAIL PREVIEW URL:');
+      console.log(previewUrl);
+      console.log('---------------------------------------------------------');
+    }
+    return { success: true, previewUrl };
+  } catch (err) {
+    console.error('Error occurred in sendResetMail:', err.message);
+    throw err;
+  }
+}
+
+module.exports = {
+  sendResetMail
+};

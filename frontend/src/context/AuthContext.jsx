@@ -1,0 +1,183 @@
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import { api, setAccessToken, registerLogoutHandler } from '../services/api';
+
+const AuthContext = createContext(null);
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const logout = useCallback(async () => {
+    try {
+      if (localStorage.getItem('user_logged_in') === 'true') {
+        await api.post('/auth/logout');
+      }
+    } catch (err) {
+      console.error('Logout request failed:', err);
+    } finally {
+      setUser(null);
+      setAccessToken('');
+      localStorage.removeItem('user_logged_in');
+    }
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const response = await api.post('/auth/refresh');
+      if (response.ok) {
+        const result = await response.json();
+        const token = result.data.accessToken;
+        setAccessToken(token);
+        
+        // Fetch current user details
+        const meResponse = await api.get('/auth/me');
+        if (meResponse.ok) {
+          const meResult = await meResponse.json();
+          const fetchedUser = meResult.data.user;
+          const pref = fetchedUser.theme_preference || 'light';
+          localStorage.setItem('theme_preference', pref);
+          // Format role and department names from backend output structure
+          setUser({
+            id: fetchedUser.id,
+            email: fetchedUser.email,
+            firstName: fetchedUser.first_name,
+            lastName: fetchedUser.last_name,
+            role: fetchedUser.role_name,
+            department: fetchedUser.department_name,
+            themePreference: pref
+          });
+          localStorage.setItem('user_logged_in', 'true');
+          return token;
+        }
+      }
+    } catch (err) {
+      console.error('Session refresh failed:', err.message);
+    }
+    return null;
+  }, []);
+
+  // Initialize and check active session on app mount
+  useEffect(() => {
+    registerLogoutHandler(logout);
+    
+    const initAuth = async () => {
+      const loggedInFlag = localStorage.getItem('user_logged_in');
+      if (loggedInFlag === 'true' || loggedInFlag === null) {
+        await refreshSession();
+      }
+      setLoading(false);
+    };
+
+    initAuth();
+  }, [refreshSession, logout]);
+
+  // Periodic proactive token refresh (every 14 minutes)
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      console.log('Proactive token refresh cycle triggered...');
+      refreshSession();
+    }, 14 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [user, refreshSession]);
+
+  const login = async (email, password) => {
+    const response = await api.post('/auth/login', { email, password });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Login failed');
+    }
+    const result = await response.json();
+    const fetchedUser = result.data.user;
+    
+    // Retrieve local theme preference active at the login page
+    const localTheme = localStorage.getItem('theme_preference') || 'light';
+    
+    // If user's theme in DB is light/null, and local theme is dark, save dark to database
+    if ((fetchedUser.themePreference === 'light' || !fetchedUser.themePreference) && localTheme === 'dark') {
+      fetchedUser.themePreference = 'dark';
+      setAccessToken(result.data.accessToken);
+      try {
+        await api.put('/auth/theme', { theme: 'dark' });
+      } catch (err) {
+        console.error('Failed to save initial login theme preference to database:', err);
+      }
+    } else {
+      setAccessToken(result.data.accessToken);
+    }
+    
+    // Save theme preference to localStorage so ThemeContext picks it up synchronously
+    localStorage.setItem('theme_preference', fetchedUser.themePreference);
+    
+    setUser(fetchedUser);
+    localStorage.setItem('user_logged_in', 'true');
+    return result;
+  };
+
+  const register = async (userData) => {
+    const response = await api.post('/auth/register', userData);
+    const result = await response.json();
+    if (!response.ok) {
+      const error = new Error(result.message || 'Registration failed');
+      error.errors = result.errors;
+      throw error;
+    }
+    return result;
+  };
+
+  const forgotPassword = async (email) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Forgot password request failed');
+    }
+    return await response.json();
+  };
+
+  const resetPassword = async (token, password) => {
+    const response = await api.post('/auth/reset-password', { token, password });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Reset password request failed');
+    }
+    return await response.json();
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    const response = await api.post('/auth/change-password', { currentPassword, newPassword });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Password change request failed');
+    }
+    return await response.json();
+  };
+
+  const updateLocalTheme = useCallback((newTheme) => {
+    setUser(prev => prev ? { ...prev, themePreference: newTheme } : null);
+  }, []);
+
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+    register,
+    forgotPassword,
+    resetPassword,
+    changePassword,
+    updateLocalTheme,
+    isAuthenticated: !!user,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

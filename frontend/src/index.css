@@ -1,0 +1,309 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Inter', 'Roboto', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Open Sans', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Enterprise Light Mode Tokens */
+  --bg-body: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --border-card: #E2E8F0;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 6px 18px rgba(0, 0, 0, 0.08);
+  
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-input-bg: #FFFFFF;
+  --color-input-border: #CBD5E1;
+  --color-input-focus: #2563EB;
+  
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #0EA5E9;
+  
+  --border-radius: 10px;
+}
+
+.dark {
+  /* Enterprise Dark Mode Tokens */
+  --bg-body: #121212;
+  --bg-card: #1E1E1E;
+  --border-card: #333333;
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  
+  --text-primary: #E0E0E0;
+  --text-secondary: #A0A0A0;
+  --text-muted: #A0A0A0;
+  
+  --color-primary: #3B6BE8; /* Muted accent blue (compliant 4.7:1 contrast with white text) */
+  --color-primary-hover: #5882EB;
+  --color-input-bg: #121212; /* Indented look inside the card */
+  --color-input-border: #333333;
+  --color-input-focus: #3B6BE8;
+  
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #0EA5E9;
+}
+
+body, button, input, select, textarea {
+  font-family: 'Inter', 'Roboto', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Open Sans', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--bg-body);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+}
+
+/* Custom Spacing & Typography Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.min-h-screen { min-height: 100vh; }
+.w-full { width: 100%; }
+.max-w-md { max-width: 28rem; }
+.max-w-4xl { max-width: 56rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.flex-1 { flex: 1 1 0%; }
+.p-2 { padding: 0.5rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-8 { margin-bottom: 2rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-xs { font-size: 0.75rem; }
+.text-sm { font-size: 0.875rem; }
+.text-base { font-size: 1rem; }
+.text-lg { font-size: 1.125rem; }
+.text-xl { font-size: 1.25rem; }
+.text-2xl { font-size: 1.5rem; }
+.text-3xl { font-size: 1.875rem; }
+.text-4xl { font-size: 2.25rem; }
+.font-normal { font-weight: 400; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.cursor-pointer { cursor: pointer; }
+.transition { transition: all 0.18s ease; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.rounded-lg { border-radius: var(--border-radius); }
+.rounded-xl { border-radius: 12px; }
+.hidden { display: none; }
+
+@media (min-width: 768px) {
+  .md\:inline { display: inline; }
+  .md\:flex { display: flex; }
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Dynamic Theme Colors mapping */
+.text-white { color: #FFFFFF !important; }
+.text-slate-400 { color: var(--text-muted) !important; }
+.text-slate-300 { color: var(--text-secondary) !important; }
+.text-slate-200 { color: var(--text-secondary) !important; }
+.text-red-400 { color: var(--color-error) !important; }
+.text-green-400 { color: var(--color-success) !important; }
+.text-blue-400 { color: var(--color-primary) !important; }
+
+/* Enterprise Card Styling */
+.glass-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.18s ease, 
+              box-shadow 0.18s ease, 
+              background-color 0.2s ease, 
+              border-color 0.2s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Enterprise Input Styling */
+.glass-input {
+  background-color: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--border-radius);
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 15px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.glass-input:focus {
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Enterprise Dropdown Select Styling */
+.glass-select {
+  appearance: none;
+  background-color: var(--color-input-bg);
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+  padding-right: 40px !important;
+}
+
+.glass-select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* Enterprise Button Styling */
+.glass-button {
+  background-color: var(--color-primary);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 12px 20px;
+  color: #FFFFFF !important;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.glass-button:hover {
+  background-color: var(--color-primary-hover);
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.1);
+}
+
+.glass-button:active {
+  transform: scale(0.98);
+}
+
+.glass-button:disabled {
+  background-color: var(--border-card);
+  color: var(--text-muted) !important;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Theme Toggle Button */
+.theme-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border-card);
+  border-radius: var(--border-radius);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+  background-color: var(--border-card);
+  color: var(--text-primary);
+}
+
+/* Tab Selector Styles for Login/Register Switch */
+.tab-container {
+  background: var(--bg-body);
+  border-radius: var(--border-radius);
+  padding: 4px;
+  border: 1px solid var(--border-card);
+  display: flex;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.tab-btn {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border: 1px solid var(--color-primary-hover);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-body);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-card);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Force layout wrappers inside standard viewport constraints */
+html, body, #root, .app-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
