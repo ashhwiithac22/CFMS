@@ -70,6 +70,20 @@ async function apiRequest(endpoint, options = {}) {
 export const api = {
   get: (endpoint, options) => apiRequest(endpoint, { method: 'GET', ...options }),
   post: (endpoint, body, options) => apiRequest(endpoint, { method: 'POST', body: JSON.stringify(body), ...options }),
+  postFormData: (endpoint, formData, options = {}) => {
+    const url = `${BASE_URL}${endpoint}`;
+    const headers = { ...options.headers };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    return fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+      ...options
+    });
+  },
   put: (endpoint, body, options) => apiRequest(endpoint, { method: 'PUT', body: JSON.stringify(body), ...options }),
   delete: (endpoint, options) => apiRequest(endpoint, { method: 'DELETE', ...options }),
 };

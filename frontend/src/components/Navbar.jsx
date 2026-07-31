@@ -1,35 +1,68 @@
-import React from 'react';
-import { Bell, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, ChevronDown, MessageSquare, CheckCheck } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import ThemeToggle from './common/ThemeToggle';
+import { api } from '../services/api';
 
-const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onToggleSidebar, isDesktop }) => {
+const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onToggleSidebar, isDesktop, unreadCount = 0, onNotificationSelect }) => {
   const { user } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
+  const shouldReduceMotion = useReducedMotion();
+  const [bellWiggle, setBellWiggle] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await api.get('/messages/notifications');
+        if (res.ok) {
+          const result = await res.json();
+          setNotifications(result.data.notifications || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      }
+    };
+
+    fetchNotifications();
+  }, [notificationsOpen]);
+
+  const triggerBellClick = () => {
+    if (!shouldReduceMotion) {
+      setBellWiggle(true);
+      setTimeout(() => setBellWiggle(false), 450);
+    }
+    setNotificationsOpen(!notificationsOpen);
+  };
 
   const getInitials = () => {
     if (user?.firstName && user?.lastName) {
       return (user.firstName[0] + user.lastName[0]).toUpperCase();
     }
-    return 'KS';
+    return 'SE';
   };
 
   const getUserName = () => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName} ${user.lastName}`;
     }
-    return 'Karthik S.';
+    return 'User';
   };
 
   const getUserRole = () => {
-    return user?.role || 'Warehouse Team';
+    return user?.role || 'Sales Executive';
   };
 
   return (
     <header 
       style={{ 
         height: '64px',
-        backgroundColor: 'var(--brand-primary)', // Dynamic royal/bright blue
+        backgroundColor: 'var(--brand-primary)',
         color: '#FFFFFF',
         display: 'flex',
         alignItems: 'center',
@@ -44,7 +77,7 @@ const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onT
         userSelect: 'none'
       }}
     >
-      {/* Left side: Hamburger menu (if mobile) + RC Logo square + Title/Subtitle two-line stack */}
+      {/* Left side: Hamburger menu (if mobile) + RC Logo square + Title/Subtitle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {!isDesktop && (
           <button
@@ -64,8 +97,6 @@ const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onT
               borderRadius: '8px'
             }}
             type="button"
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
             <span style={{ fontSize: '20px', fontWeight: 'bold' }}>☰</span>
           </button>
@@ -83,39 +114,49 @@ const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onT
             fontWeight: 'bold', 
             fontSize: '16px',
             backgroundColor: '#FFFFFF', 
-            color: '#1E4FD9' // Logo text matches navbar blue
+            color: '#1E4FD9'
           }}
         >
           RC
         </div>
 
-        {/* Two-line text stack with 4px gap from logo */}
+        {/* Two-line text stack */}
         <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '4px', lineHeight: 1.1, textAlign: 'left' }}>
-          <span style={{ fontWeight: 'bold', fontSize: '16px', color: '#FFFFFF' }}>Complaint Portal</span>
+          <span style={{ fontWeight: 'bold', fontSize: '16px', color: '#FFFFFF' }}>Ramraj Cotton CFMS</span>
           <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#C7D6FF', marginTop: '2px' }}>
-            Logistics Quality Assurance Matrix
+            Complaint Lifecycle Automation & Escalation
           </span>
         </div>
       </div>
 
-      {/* Right side: Role/Location, separator dot, Bell icon, User avatar & dropdown chevron */}
+      {/* Right side: Role/Location, Theme toggle, Bell icon, User avatar & dropdown */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         
-        {/* (a) Role text */}
+        {/* Role text */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22C55E', display: 'inline-block' }}></span>
           <span style={{ fontSize: '14px', color: '#FFFFFF', fontWeight: 'normal' }}>{getUserRole()}</span>
         </div>
 
-        {/* (b) Dot separator */}
+        {/* Dot separator */}
         <span style={{ fontSize: '14px', color: '#FFFFFF', opacity: 0.8 }}>·</span>
 
-        {/* (c) Location text */}
-        <span style={{ fontSize: '14px', color: '#FFFFFF', fontWeight: 'normal' }}>Tirupur Warehouse</span>
+        {/* Location text */}
+        <span style={{ fontSize: '14px', color: '#FFFFFF', fontWeight: 'normal' }}>
+          {user?.warehouseName || 'Tirupur Warehouse'}
+        </span>
 
-        {/* (d) Bell Icon (white, 20px) with red badge */}
+        {/* Navbar Theme Toggle */}
+        <ThemeToggle style={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: '#FFFFFF' }} />
+
+        {/* Bell Icon with Unread Count Badge & Dropdown */}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <button 
+          <motion.button 
+            onClick={triggerBellClick}
+            animate={bellWiggle ? { rotate: [0, -10, 10, -6, 6, 0] } : {}}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+            whileHover={shouldReduceMotion ? {} : { scale: 1.1 }}
+            whileTap={shouldReduceMotion ? {} : { scale: 0.9 }}
             style={{ 
               background: 'transparent', 
               border: 'none', 
@@ -125,186 +166,193 @@ const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onT
               color: '#FFFFFF',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              position: 'relative'
             }}
             type="button"
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
             <Bell size={20} style={{ color: '#FFFFFF' }} />
-            <span 
+            {unreadCount > 0 && (
+              <span 
+                style={{ 
+                  position: 'absolute', 
+                  top: '-2px', 
+                  right: '-2px', 
+                  backgroundColor: '#EF4444', 
+                  color: '#FFFFFF',
+                  borderRadius: '50%',
+                  minWidth: '16px',
+                  height: '16px',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                  border: '2px solid #1E4FD9'
+                }}
+              >
+                {unreadCount}
+              </span>
+            )}
+          </motion.button>
+
+          {/* Notifications Dropdown */}
+          <AnimatePresence>
+            {notificationsOpen && (
+              <motion.div 
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.95 }}
+                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                style={{ 
+                  position: 'absolute', 
+                  right: 0, 
+                  top: '100%', 
+                  marginTop: '8px', 
+                  width: '320px', 
+                  backgroundColor: 'var(--bg-primary)', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: '12px', 
+                  boxShadow: 'var(--shadow-lg)', 
+                  padding: '12px', 
+                  zIndex: 2000,
+                  boxSizing: 'border-box'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>Notifications</span>
+                  <span style={{ fontSize: '11px', color: 'var(--brand-primary)', fontWeight: '600' }}>{unreadCount} Unread</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
+                      No recent notifications
+                    </div>
+                  ) : (
+                    notifications.map(n => (
+                      <div 
+                        key={n.id}
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          if (onNotificationSelect) onNotificationSelect(n.complaint_id);
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          backgroundColor: n.read_status === 'Unread' ? 'var(--bg-secondary)' : 'transparent',
+                          border: '1px solid var(--border-color)',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <MessageSquare size={12} style={{ color: 'var(--brand-primary)' }} />
+                          <span>{n.title}</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {n.preview}
+                        </div>
+                        <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* User Profile Menu Dropdown */}
+        <div style={{ position: 'relative' }}>
+          <motion.button 
+            onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+            whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
+            whileTap={shouldReduceMotion ? {} : { scale: 0.98 }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '4px 8px',
+              borderRadius: '8px',
+              color: '#FFFFFF'
+            }}
+            type="button"
+          >
+            <div 
               style={{ 
-                position: 'absolute', 
-                top: '0px', 
-                right: '0px', 
-                backgroundColor: '#EF4444', 
-                color: '#FFFFFF', 
-                width: '16px',
-                height: '16px',
-                fontSize: '10px', 
-                fontWeight: 'bold', 
-                borderRadius: '50%',
+                width: '34px', 
+                height: '34px', 
+                borderRadius: '50%', 
+                backgroundColor: '#FFFFFF',
+                color: '#1E4FD9',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                lineHeight: 1
-              }}
-            >
-              5
-            </span>
-          </button>
-        </div>
-
-        {/* Theme Toggle Button next to Bell */}
-        <button
-          onClick={toggleTheme}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '6px',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '18px',
-            transition: 'transform 200ms ease',
-            color: '#FFFFFF'
-          }}
-          type="button"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-            e.currentTarget.style.transform = 'rotate(15deg)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.transform = 'rotate(0deg)';
-          }}
-          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-        >
-          {theme === 'light' ? '☀️' : '🌙'}
-        </button>
-
-        {/* (e) Circular Avatar + User text + Dropdown Chevron */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <div 
-            onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              cursor: 'pointer', 
-              padding: '4px 8px', 
-              borderRadius: '8px',
-              transition: 'background-color 150ms ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            {/* User Avatar */}
-            <div 
-              style={{ 
-                width: '32px', 
-                height: '32px', 
-                borderRadius: '50%', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                fontWeight: 'bold', 
-                fontSize: '12px', 
-                backgroundColor: '#4F7CFF', 
-                color: '#FFFFFF'
+                fontWeight: 'bold',
+                fontSize: '14px',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
               }}
             >
               {getInitials()}
             </div>
-            
-            {/* User name text */}
-            <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#FFFFFF' }}>
-              {getUserName()}
-            </span>
+            <span style={{ fontSize: '14px', fontWeight: '500', color: '#FFFFFF' }}>{getUserName()}</span>
+            <ChevronDown size={16} style={{ color: '#FFFFFF', transform: profileDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 200ms ease' }} />
+          </motion.button>
 
-            {/* Dropdown Chevron */}
-            <ChevronDown size={14} style={{ color: '#FFFFFF' }} />
-          </div>
-
-          {profileDropdownOpen && (
-            <div 
-              style={{ 
-                position: 'absolute',
-                right: 0,
-                top: '100%',
-                marginTop: '8px',
-                width: '192px',
-                borderRadius: '8px',
-                boxShadow: 'var(--shadow-lg)',
-                border: '1px solid var(--border-color)',
-                padding: '8px',
-                zIndex: 1000,
-                backgroundColor: 'var(--bg-floating)', 
-                color: 'var(--text-primary)'
-              }}
-            >
-              <div 
+          <AnimatePresence>
+            {profileDropdownOpen && (
+              <motion.div 
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.95 }}
+                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                 style={{ 
-                  padding: '8px 12px', 
-                  borderBottom: '1px solid var(--border-color)', 
-                  fontSize: '10px', 
-                  color: 'var(--text-muted)' 
+                  position: 'absolute', 
+                  right: 0, 
+                  top: '100%', 
+                  marginTop: '8px', 
+                  width: '200px', 
+                  backgroundColor: 'var(--bg-primary)', 
+                  border: '1px solid var(--border-color)', 
+                  borderRadius: '12px', 
+                  boxShadow: 'var(--shadow-lg)', 
+                  padding: '8px 0', 
+                  zIndex: 2000,
+                  boxSizing: 'border-box'
                 }}
               >
-                Signed in as <strong style={{ color: 'var(--text-primary)', display: 'block', marginTop: '2px' }}>{user?.email || 'admin@complaint.com'}</strong>
-              </div>
-              <button
-                onClick={() => { setProfileDropdownOpen(false); window.location.href = '/change-password'; }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  textAlign: 'left',
-                  border: 'none',
-                  backgroundColor: 'transparent',
-                  cursor: 'pointer',
-                  color: 'var(--text-primary)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                type="button"
-              >
-                <span>Change Password</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  textAlign: 'left',
-                  border: 'none',
-                  backgroundColor: 'transparent',
-                  cursor: 'pointer',
-                  color: '#EF4444'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                type="button"
-              >
-                <span>Logout</span>
-              </button>
-            </div>
-          )}
+                <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{getUserName()}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{getUserRole()}</div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#EF4444',
+                    fontWeight: '600',
+                    fontSize: '13px',
+                    textAlign: 'left',
+                    cursor: 'pointer'
+                  }}
+                  type="button"
+                >
+                  Sign Out
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-
       </div>
     </header>
   );

@@ -17,77 +17,113 @@ const baseConfig = {
   }
 };
 
-function getDynamicSqlPort() {
+function getDynamicSqlPorts() {
+  const candidatePorts = [];
+  if (process.env.DB_PORT) {
+    const envPort = parseInt(process.env.DB_PORT, 10);
+    if (!isNaN(envPort)) candidatePorts.push(envPort);
+  }
   try {
     const cmd = 'powershell -Command "Get-NetTCPConnection -State Listen | Where-Object { $_.OwningProcess -eq (Get-Process -Name sqlservr).Id } | Select-Object -ExpandProperty LocalPort"';
     const output = execSync(cmd).toString().trim();
     if (output) {
       const ports = output.split(/\r?\n/).map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p));
-      if (ports.length > 0) {
-        console.log(`Dynamically resolved SQL Server listening port(s): ${ports.join(', ')}`);
-        return ports[0];
+      for (const p of ports) {
+        if (!candidatePorts.includes(p)) candidatePorts.push(p);
       }
     }
   } catch (err) {
-    console.warn('Failed to dynamically resolve SQL Server port via PowerShell:', err.message);
+    console.warn('Failed to resolve dynamic ports via PowerShell:', err.message);
   }
-  return undefined;
+  if (!candidatePorts.includes(1433)) candidatePorts.push(1433);
+  return candidatePorts;
 }
 
 let pool = null;
 
-async function connectDB() {
-  try {
-    const dbName = process.env.DB_DATABASE || 'CustomerFeedbackDB';
-    
-    // Resolve dynamic port if not specified in env
-    if (!baseConfig.port) {
-      const dynamicPort = getDynamicSqlPort();
-      if (dynamicPort) {
-        baseConfig.port = dynamicPort;
-        baseConfig.options.instanceName = undefined; // Disable instanceName to connect directly via resolved port
+async function attemptConnection(config) {
+  const masterConfig = { 
+    ...config, 
+    database: 'master'
+  };
+  const masterPool = new sql.ConnectionPool(masterConfig);
+  await masterPool.connect();
+  return masterPool;
+}
+
+async function connectDB(maxRetries = 3) {
+  const dbName = process.env.DB_DATABASE || 'CustomerFeedbackDB';
+  const candidatePorts = getDynamicSqlPorts();
+  console.log(`Available SQL Server candidate ports to test: ${candidatePorts.join(', ')}`);
+
+  let connectedMasterPool = null;
+  let workingPort = null;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`Database connection attempt ${attempt} of ${maxRetries}...`);
+    for (const port of candidatePorts) {
+      const configToTest = {
+        ...baseConfig,
+        port: port,
+        options: {
+          ...baseConfig.options,
+          encrypt: false, // Local SQL Server encryption disabled for direct TDS handshake
+          instanceName: undefined
+        }
+      };
+      console.log(`Trying SQL Server at ${configToTest.server}:${port}...`);
+      try {
+        connectedMasterPool = await attemptConnection(configToTest);
+        workingPort = port;
+        baseConfig.port = port;
+        baseConfig.options.encrypt = false;
+        baseConfig.options.instanceName = undefined;
+        console.log(`Successfully established connection on port ${port}!`);
+        break;
+      } catch (err) {
+        lastError = err;
+        console.warn(`Connection to port ${port} failed (${err.message}). Trying next candidate...`);
       }
     }
 
-    console.log(`Connecting to master database at ${baseConfig.server}${baseConfig.port ? ':' + baseConfig.port : ''}...`);
-    
-    const masterConfig = { 
-      ...baseConfig, 
-      database: 'master',
-    };
-    
-    // Connect to master database
-    const masterPool = new sql.ConnectionPool(masterConfig);
-    await masterPool.connect();
-    console.log('Connected to master database successfully.');
+    if (connectedMasterPool) break;
+
+    if (attempt < maxRetries) {
+      console.log(`Retrying in 1 second...`);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  if (!connectedMasterPool) {
+    throw new Error(`Failed to connect to SQL Server on any candidate port (${candidatePorts.join(', ')}). Last error: ${lastError ? lastError.message : 'Unknown'}`);
+  }
+
+  try {
     console.log(`Checking/Creating database "${dbName}"...`);
-    
-    // Create database if not exists
-    await masterPool.request().query(`
+    await connectedMasterPool.request().query(`
       IF DB_ID('${dbName}') IS NULL
       BEGIN
         CREATE DATABASE [${dbName}];
       END
     `);
     console.log(`Database "${dbName}" verified/created successfully.`);
-    
-    // Close connection to master database
-    await masterPool.close();
-    
+    await connectedMasterPool.close();
+
     // Connect to target database
     const targetConfig = {
       ...baseConfig,
       database: dbName
     };
-    
-    console.log(`Connecting to target database "${dbName}"...`);
+
+    console.log(`Connecting to target database "${dbName}" on port ${workingPort}...`);
     pool = new sql.ConnectionPool(targetConfig);
     await pool.connect();
-    console.log(`Connected to target database "${dbName}" successfully.`);
-    
+    console.log(`Connected to target database "${dbName}" successfully on port ${workingPort}.`);
+
     // Run schema and seed scripts
     await initializeDatabase();
-    
+
     return pool;
   } catch (err) {
     console.error('Database connection / initialization failed:', err.message);
@@ -104,72 +140,8 @@ async function initializeDatabase() {
     // Execute DDL schema statements
     await pool.request().query(schemaSql);
     console.log('Database schema verified.');
-    
-    console.log('Seeding initial roles & departments...');
-    const seedPath = path.join(__dirname, '../database/seed.sql');
-    const seedSql = fs.readFileSync(seedPath, 'utf8');
-    await pool.request().query(seedSql);
-    console.log('Database seed roles and departments verified.');
-    
-    // Seed default Administrator user programmatically
-    await seedAdministratorUser();
   } catch (err) {
     console.error('Error initializing database:', err.message);
-    throw err;
-  }
-}
-
-async function seedAdministratorUser() {
-  try {
-    // Find the Administrator role ID
-    const roleResult = await pool.request()
-      .input('roleName', sql.VarChar, 'Administrator')
-      .query('SELECT id FROM Roles WHERE name = @roleName');
-      
-    if (roleResult.recordset.length === 0) {
-      throw new Error('Administrator role not found. Seed Roles first.');
-    }
-    const adminRoleId = roleResult.recordset[0].id;
-    
-    // Find the Administration department ID
-    const deptResult = await pool.request()
-      .input('deptName', sql.VarChar, 'Administration')
-      .query('SELECT id FROM Departments WHERE name = @deptName');
-      
-    if (deptResult.recordset.length === 0) {
-      throw new Error('Administration department not found. Seed Departments first.');
-    }
-    const adminDeptId = deptResult.recordset[0].id;
-    
-    // Check if any admin exists
-    const adminUserResult = await pool.request()
-      .input('roleId', sql.Int, adminRoleId)
-      .query('SELECT id FROM Users WHERE role_id = @roleId');
-      
-    if (adminUserResult.recordset.length === 0) {
-      console.log('No Administrator user found. Seeding default administrator...');
-      const adminEmail = 'admin@complaint.com';
-      const password = 'Admin@123';
-      const passwordHash = await bcrypt.hash(password, 10);
-      
-      await pool.request()
-        .input('email', sql.VarChar, adminEmail)
-        .input('password_hash', sql.VarChar, passwordHash)
-        .input('first_name', sql.VarChar, 'System')
-        .input('last_name', sql.VarChar, 'Admin')
-        .input('role_id', sql.Int, adminRoleId)
-        .input('department_id', sql.Int, adminDeptId)
-        .input('status', sql.VarChar, 'Active')
-        .query(`
-          INSERT INTO Users (email, password_hash, first_name, last_name, role_id, department_id, status)
-          VALUES (@email, @password_hash, @first_name, @last_name, @role_id, @department_id, @status)
-        `);
-      console.log(`Default Administrator seeded: email = ${adminEmail}, password = ${password}`);
-    } else {
-      console.log('Administrator user already exists.');
-    }
-  } catch (err) {
-    console.error('Error seeding Administrator user:', err.message);
     throw err;
   }
 }
@@ -324,8 +296,14 @@ function createMockPool() {
 
 function getPool() {
   if (!pool) {
-    console.warn("WARNING: Database pool not connected. Returning mock database pool fallback.");
-    return createMockPool();
+    if (process.env.ALLOW_MOCK_DB === 'true') {
+      console.warn("=================================================");
+      console.warn("WARNING: USING IN-MEMORY MOCK DATABASE FALLBACK!");
+      console.warn("ALLOW_MOCK_DB=true is enabled. Data will NOT persist to SQL Server!");
+      console.warn("=================================================");
+      return createMockPool();
+    }
+    throw new Error("FATAL: Database pool is not connected to SQL Server. Check SQL Server service and credentials.");
   }
   return pool;
 }

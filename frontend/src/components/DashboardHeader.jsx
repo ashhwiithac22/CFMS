@@ -1,7 +1,11 @@
 import React from 'react';
 import { Search, Calendar, Download, Plus } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const DashboardHeader = ({ searchQuery, setSearchQuery }) => {
+const DashboardHeader = ({ searchQuery, setSearchQuery, onRaiseComplaint }) => {
+  const { user } = useAuth();
+  const isSalesExec = user?.role === 'Sales Executive';
+
   return (
     <section 
       style={{ 
@@ -34,7 +38,7 @@ const DashboardHeader = ({ searchQuery, setSearchQuery }) => {
             lineHeight: 1.5
           }}
         >
-          Tirupur Warehouse — Real-time SLA Tracking & Complaint Management
+          {isSalesExec ? 'Sales Executive Portal — Real-time Complaint Tracking & Escalation' : 'Tirupur Warehouse — Real-time SLA Tracking & Complaint Management'}
         </p>
       </div>
 
@@ -83,81 +87,88 @@ const DashboardHeader = ({ searchQuery, setSearchQuery }) => {
           />
         </div>
 
-        {/* Date picker display button */}
-        <button 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            padding: '0 16px', 
-            height: '40px',
-            fontSize: '14px', 
-            fontWeight: '600', 
-            backgroundColor: 'var(--bg-primary)', 
-            border: '1px solid var(--border-color)', 
-            borderRadius: '8px', 
-            color: 'var(--text-primary)',
-            cursor: 'pointer',
-            boxSizing: 'border-box'
-          }}
-          type="button"
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
-        >
-          <Calendar size={16} style={{ color: 'var(--text-secondary)' }} />
-          <span>Jul 13 – Jul 15, 2024</span>
-        </button>
+        {/* Date picker display button (Hidden for Sales Executive) */}
+        {!isSalesExec && (
+          <button 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '0 16px', 
+              height: '40px',
+              fontSize: '14px', 
+              fontWeight: '600', 
+              backgroundColor: 'var(--bg-primary)', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: '8px', 
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              boxSizing: 'border-box'
+            }}
+            type="button"
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
+          >
+            <Calendar size={16} style={{ color: 'var(--text-secondary)' }} />
+            <span>Jul 13 – Jul 15, 2024</span>
+          </button>
+        )}
 
-        {/* Export action button */}
-        <button 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            padding: '0 16px', 
-            height: '40px',
-            fontSize: '14px', 
-            fontWeight: '600', 
-            backgroundColor: 'var(--bg-primary)', 
-            border: '1px solid var(--border-color)', 
-            borderRadius: '8px', 
-            color: 'var(--text-primary)',
-            cursor: 'pointer',
-            boxSizing: 'border-box'
-          }}
-          type="button"
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
-        >
-          <Download size={16} style={{ color: 'var(--text-secondary)' }} />
-          <span>Export</span>
-        </button>
+        {/* Export action button (Hidden for Sales Executive) */}
+        {!isSalesExec && (
+          <button 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '0 16px', 
+              height: '40px',
+              fontSize: '14px', 
+              fontWeight: '600', 
+              backgroundColor: 'var(--bg-primary)', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: '8px', 
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              boxSizing: 'border-box'
+            }}
+            type="button"
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
+          >
+            <Download size={16} style={{ color: 'var(--text-secondary)' }} />
+            <span>Export</span>
+          </button>
+        )}
 
-        {/* Primary solid Raise Complaint trigger */}
-        <button 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            padding: '0 20px', 
-            height: '40px',
-            fontSize: '14px', 
-            fontWeight: '600', 
-            borderRadius: '8px', 
-            backgroundColor: 'var(--brand-primary)', // Dynamic royal blue
-            color: '#FFFFFF',
-            border: 'none',
-            cursor: 'pointer',
-            boxSizing: 'border-box',
-            transition: 'opacity 0.15s ease'
-          }}
-          type="button"
-          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-          onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-        >
-          <Plus size={16} style={{ color: '#FFFFFF' }} />
-          <span>Raise Complaint</span>
-        </button>
+        {/* Primary Raise Complaint trigger (Visible for Sales Executive) */}
+        {isSalesExec && (
+          <button 
+            onClick={onRaiseComplaint}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '0 20px', 
+              height: '40px',
+              fontSize: '14px', 
+              fontWeight: '600', 
+              borderRadius: '8px', 
+              backgroundColor: 'var(--brand-primary)',
+              color: '#FFFFFF',
+              border: 'none',
+              cursor: 'pointer',
+              boxSizing: 'border-box',
+              transition: 'opacity 0.15s ease'
+            }}
+            type="button"
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+          >
+            <Plus size={16} style={{ color: '#FFFFFF' }} />
+            <span>Raise Complaint</span>
+          </button>
+        )}
       </div>
     </section>
   );

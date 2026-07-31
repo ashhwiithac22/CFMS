@@ -1,5 +1,6 @@
 const AuthService = require('../services/auth.service');
 const RepositoryFactory = require('../repositories/repository.factory');
+const { getPool } = require('../config/db');
 const authService = new AuthService();
 const roleRepo = RepositoryFactory.getRoleRepository();
 const userRepo = RepositoryFactory.getUserRepository();
@@ -173,13 +174,20 @@ class AuthController {
 
   async getMetadata(req, res, next) {
     try {
-      const roles = await roleRepo.findAll();
-      const departments = await roleRepo.findAllDepartments();
+      const pool = getPool();
+      const warehousesResult = await pool.request().query('SELECT id, name, location FROM Warehouses');
+      const roles = [
+        { id: 'Sales Executive', name: 'Sales Executive' },
+        { id: 'Warehouse Team', name: 'Warehouse Team' },
+        { id: 'Warehouse Manager', name: 'Warehouse Manager' },
+        { id: 'Administrator', name: 'Administrator' }
+      ];
       res.status(200).json({
         success: true,
         data: {
-          roles: roles.map(r => ({ id: r.id, name: r.name })),
-          departments: departments.map(d => ({ id: d.id, name: d.name }))
+          roles,
+          warehouses: warehousesResult.recordset || [],
+          departments: []
         }
       });
     } catch (err) {

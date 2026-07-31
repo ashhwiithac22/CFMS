@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, CheckCircle2, Paperclip, X } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import Button from './common/Button';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile }) => {
+const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile, attachmentFile, setAttachmentFile }) => {
   const { user } = useAuth();
+  const shouldReduceMotion = useReducedMotion();
+  const fileInputRef = useRef(null);
+  
   const [messageText, setMessageText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [fileError, setFileError] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   // Auto-hide toast after 2 seconds
   useEffect(() => {
@@ -19,71 +25,134 @@ const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile }) => {
     }
   }, [showToast]);
 
+  // Generate preview URL when attachment changes
+  useEffect(() => {
+    if (attachmentFile) {
+      const url = URL.createObjectURL(attachmentFile);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [attachmentFile]);
+
+  const handleFileChange = (e) => {
+    setFileError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setFileError('Only image files (JPEG, PNG, GIF, WEBP) are allowed.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setFileError('File size exceeds the 5MB maximum limit.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (setAttachmentFile) {
+      setAttachmentFile(file);
+    }
+  };
+
+  const removeAttachment = () => {
+    if (setAttachmentFile) setAttachmentFile(null);
+    setFileError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSend = async (e) => {
     if (e) e.preventDefault();
-    if (!selectedComplaint || !messageText.trim() || isSending) return;
+    if (!selectedComplaint || (!messageText.trim() && !attachmentFile) || isSending) return;
 
     setIsSending(true);
-    // Recipient matches raisedBy (if System Admin/Executive, direct to Administrator/Sales Executive)
     const recipientRole = selectedComplaint.raisedBy === 'System Admin' ? 'Administrator' : 'Sales Executive';
 
     try {
-      const res = await api.post('/messages', {
-        complaint_id: selectedComplaint.id,
-        message_text: messageText.trim(),
-        recipient_role: recipientRole
-      });
+      const formData = new FormData();
+      formData.append('complaint_id', selectedComplaint.id);
+      formData.append('message_text', messageText.trim());
+      formData.append('recipient_role', recipientRole);
+      if (attachmentFile) {
+        formData.append('attachment', attachmentFile);
+      }
+
+      const res = await api.postFormData('/messages', formData);
 
       if (res.ok) {
         setMessageText('');
+        if (setAttachmentFile) setAttachmentFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setShowToast(true);
         if (onMessageSent) {
           onMessageSent(selectedComplaint.id);
         }
+      } else {
+        const data = await res.json();
+        setFileError(data.message || 'Failed to send message.');
       }
     } catch (err) {
       console.error('Failed to send quick message:', err);
+      setFileError('Failed to send message.');
     } finally {
       setIsSending(false);
     }
   };
 
-  const isButtonDisabled = !selectedComplaint || !messageText.trim() || isSending;
-
-  // Layout parameters: offset by 220px sidebar on desktop/tablet, full-width on mobile
+  const isButtonDisabled = !selectedComplaint || (!messageText.trim() && !attachmentFile) || isSending;
   const leftOffset = isMobile ? '0' : '220px';
 
   return (
     <>
       {/* Toast Notification sent above the bar */}
-      {showToast && (
-        <div 
-          style={{
-            position: 'fixed',
-            bottom: '76px', // 12px above the 64px bar
-            left: `calc(${leftOffset} + 24px)`,
-            backgroundColor: 'var(--completed-bg)',
-            border: '1px solid var(--border-color)',
-            color: 'var(--completed-text)',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            zIndex: 1400,
-            animation: 'slide-up-fade 200ms ease'
-          }}
-        >
-          <CheckCircle2 size={16} style={{ color: 'var(--completed-text)' }} />
-          <span>Message sent</span>
-        </div>
-      )}
+      <AnimatePresence>
+        {(showToast || fileError) && (
+          <motion.div 
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.95 }}
+            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            style={{
+              position: 'fixed',
+              bottom: '76px',
+              left: `calc(${leftOffset} + 24px)`,
+              backgroundColor: fileError ? 'rgba(239, 68, 68, 0.95)' : 'var(--completed-bg)',
+              border: fileError ? '1px solid #EF4444' : '1px solid var(--border-color)',
+              color: fileError ? '#FFFFFF' : 'var(--completed-text)',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+              zIndex: 1400
+            }}
+          >
+            {fileError ? (
+              <>
+                <X size={16} style={{ color: '#FFFFFF' }} />
+                <span>{fileError}</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 size={16} style={{ color: 'var(--completed-text)' }} />
+                <span>Message sent successfully</span>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Persistent Quick Message Input Bar */}
-      <div 
+      <motion.div 
+        initial={shouldReduceMotion ? { opacity: 0 } : { y: 64, opacity: 0 }}
+        animate={shouldReduceMotion ? { opacity: 1 } : { y: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         style={{
           position: 'fixed',
           bottom: 0,
@@ -99,11 +168,10 @@ const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile }) => {
           alignItems: 'center',
           gap: '12px',
           boxSizing: 'border-box',
-          animation: 'slide-up-entrance 250ms ease',
           userSelect: 'none'
         }}
       >
-        {/* 1. Context Chip on the far left */}
+        {/* Context Chip on the far left */}
         <div 
           style={{
             display: 'flex',
@@ -133,9 +201,50 @@ const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile }) => {
           )}
         </div>
 
-        {/* 2. Text Input */}
+        {/* Paperclip attachment button */}
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          accept="image/*" 
+          onChange={handleFileChange} 
+          style={{ display: 'none' }} 
+        />
+        <button
+          type="button"
+          disabled={!selectedComplaint}
+          onClick={() => fileInputRef.current?.click()}
+          title="Attach image"
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '8px',
+            border: '1px solid var(--border-color)',
+            backgroundColor: 'var(--bg-primary)',
+            color: selectedComplaint ? 'var(--text-primary)' : 'var(--text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: selectedComplaint ? 'pointer' : 'not-allowed',
+            flexShrink: 0
+          }}
+        >
+          <Paperclip size={18} />
+        </button>
+
+        {/* Thumbnail Preview if file attached */}
+        {previewUrl && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}>
+            <img src={previewUrl} alt="Preview" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+            <button type="button" onClick={removeAttachment} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: 'var(--text-muted)' }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Text Input */}
         <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
           <input
+            id="quick-message-input"
             type="text"
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
@@ -144,7 +253,7 @@ const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile }) => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSend();
             }}
-            placeholder={selectedComplaint ? "Type your message here..." : "Click a row in the table to select a complaint..."}
+            placeholder={selectedComplaint ? `Type message to ${selectedComplaint.raisedBy}...` : "Click a row in the table to select a complaint..."}
             disabled={!selectedComplaint}
             style={{
               width: '100%',
@@ -164,47 +273,18 @@ const QuickMessageBar = ({ selectedComplaint, onMessageSent, isMobile }) => {
           />
         </div>
 
-        {/* 3. Send Message Button */}
-        <button
+        {/* Send Message Button */}
+        <Button
           onClick={handleSend}
           disabled={isButtonDisabled}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          style={{
-            height: '40px',
-            padding: '0 20px',
-            backgroundColor: isButtonDisabled ? 'var(--bg-secondary)' : 'var(--brand-primary)',
-            color: isButtonDisabled ? 'var(--text-muted)' : '#FFFFFF',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            borderRadius: '8px',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
-            transition: 'background-color 150ms ease, opacity 150ms ease',
-            opacity: isButtonDisabled ? 0.55 : 1,
-            boxSizing: 'border-box'
-          }}
-          type="button"
+          loading={isSending}
+          variant="primary"
+          size="md"
+          icon={<Send size={16} />}
         >
-          <Send size={16} style={{ color: isButtonDisabled ? 'var(--text-muted)' : '#FFFFFF' }} />
-          <span>Send Message</span>
-        </button>
-      </div>
-
-      {/* Embed Keyframe animations directly */}
-      <style>{`
-        @keyframes slide-up-entrance {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-        @keyframes slide-up-fade {
-          from { transform: translateY(10px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-      `}</style>
+          Send Message
+        </Button>
+      </motion.div>
     </>
   );
 };

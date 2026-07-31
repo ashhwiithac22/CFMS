@@ -26,15 +26,19 @@ const Sidebar = ({ activeTab, setActiveTab, handleLogout, isDesktop, sidebarOpen
   };
 
   const renderSidebarContent = () => {
-    const navItems = [
+    const isSalesExec = user?.role === 'Sales Executive';
+
+    const allNavItems = [
       { name: 'Dashboard', icon: <Grid size={18} /> },
-      { name: 'Raise Complaint', icon: <PlusCircle size={18} /> },
+      { name: 'Raise Complaint', icon: <PlusCircle size={18} />, salesOnly: true },
       { name: 'My Complaints', icon: <FileText size={18} /> },
       { name: 'Notifications', icon: <Bell size={18} />, badge: 5, badgeType: 'normal' },
       { name: 'Messages', icon: <MessageSquare size={18} />, badge: unreadMessagesCount, badgeType: 'high' },
       { name: 'Reports', icon: <BarChart3 size={18} /> },
       { name: 'Settings', icon: <Settings size={18} /> }
     ];
+
+    const navItems = allNavItems.filter(item => !item.salesOnly || isSalesExec);
 
     return (
       <div 
@@ -78,7 +82,7 @@ const Sidebar = ({ activeTab, setActiveTab, handleLogout, isDesktop, sidebarOpen
                   backgroundColor: isActive ? 'var(--brand-primary)' : 'transparent',
                   color: isActive ? '#FFFFFF' : 'var(--text-secondary)',
                   marginBottom: '4px', // Critical gap to prevent visual overlap
-                  transition: 'background-color 150ms ease, color 150ms ease',
+                  transition: 'background-color 200ms cubic-bezier(0.16, 1, 0.3, 1), color 200ms ease, transform 150ms ease',
                   boxSizing: 'border-box'
                 }}
                 type="button"

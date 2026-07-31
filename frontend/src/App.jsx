@@ -8,6 +8,8 @@ import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 
+import RaiseComplaint from './pages/RaiseComplaint';
+
 function App() {
   const { isAuthenticated } = useAuth();
 
@@ -44,6 +46,15 @@ function App() {
         } 
       />
       
+      <Route 
+        path="/raise-complaint" 
+        element={
+          <ProtectedRoute allowedRoles={['Sales Executive']}>
+            <RaiseComplaint />
+          </ProtectedRoute>
+        } 
+      />
+
       <Route 
         path="/change-password" 
         element={

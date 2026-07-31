@@ -15,8 +15,8 @@ class AuthService {
       { 
         userId: user.id, 
         email: user.email, 
-        role: user.role_name, 
-        department: user.department_name 
+        role: user.role || user.role_name, 
+        warehouseId: user.warehouse_id 
       },
       process.env.JWT_SECRET,
       { expiresIn: '15m' }
@@ -66,12 +66,13 @@ class AuthService {
       refreshToken,
       user: {
         id: user.id,
+        username: user.username,
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
-        role: user.role_name,
-        department: user.department_name,
-        themePreference: user.theme_preference || 'light'
+        role: user.role || user.role_name,
+        warehouseId: user.warehouse_id,
+        warehouseName: user.warehouse_name
       }
     };
   }
@@ -82,27 +83,23 @@ class AuthService {
       throw new ValidationError('Email already registered');
     }
 
-    const role = await roleRepo.findById(userData.roleId);
-    if (!role) {
+    const validRoles = ['Sales Executive', 'Warehouse Team', 'Warehouse Manager', 'Administrator'];
+    const role = userData.role || userData.roleId || 'Sales Executive';
+    if (!validRoles.includes(role)) {
       throw new ValidationError('Invalid role selected');
     }
 
-    if (userData.departmentId) {
-      const depts = await roleRepo.findAllDepartments();
-      const deptExists = depts.some(d => d.id === userData.departmentId);
-      if (!deptExists) {
-        throw new ValidationError('Invalid department selected');
-      }
-    }
-
     const passwordHash = await bcrypt.hash(userData.password, 10);
+    const username = userData.username || userData.email.split('@')[0] + Math.floor(Math.random() * 1000);
+
     const userId = await userRepo.create({
+      username,
       email: userData.email,
       passwordHash,
       firstName: userData.firstName,
       lastName: userData.lastName,
-      roleId: userData.roleId,
-      departmentId: userData.departmentId,
+      role,
+      warehouseId: userData.warehouseId || null,
       status: 'Active'
     });
 
@@ -111,18 +108,18 @@ class AuthService {
       action: 'REGISTER',
       ipAddress,
       userAgent,
-      details: `User registered with role: ${role.name}`
+      details: `User registered with role: ${role}`
     });
 
     const user = await userRepo.findById(userId);
     return {
       id: user.id,
+      username: user.username,
       email: user.email,
       firstName: user.first_name,
       lastName: user.last_name,
-      role: user.role_name,
-      department: user.department_name,
-      themePreference: user.theme_preference || 'light'
+      role: user.role,
+      warehouseName: user.warehouse_name
     };
   }
 

@@ -68,6 +68,16 @@ body {
   overflow-x: hidden;
 }
 
+/* Auth Page Subtle Gradient Mesh Background */
+.bg-auth-mesh {
+  background-color: var(--bg-body);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(30, 79, 217, 0.06) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(30, 79, 217, 0.05) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(59, 107, 232, 0.04) 0px, transparent 60%);
+  transition: background-color 0.2s ease;
+}
+
 /* Custom Spacing & Typography Utilities */
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
@@ -157,26 +167,58 @@ body {
   box-shadow: var(--shadow-card-hover);
 }
 
-/* Enterprise Input Styling */
+/* Auth Card Elevated Style */
+.glass-card-auth {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.dark .glass-card-auth {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Enterprise Input Group & Focus Glow */
+.glass-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.glass-input-group:focus-within label {
+  color: var(--color-primary) !important;
+}
+
 .glass-input {
   background-color: var(--color-input-bg);
   border: 1px solid var(--color-input-border);
-  border-radius: var(--border-radius);
+  border-radius: 8px;
   padding: 12px 16px;
   color: var(--text-primary);
   font-size: 15px;
   width: 100%;
   box-sizing: border-box;
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.2s ease, color 0.2s ease;
+  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease, color 200ms ease;
 }
 
 .glass-input:focus {
-  border-color: var(--color-input-focus);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(76, 124, 240, 0.14);
 }
 
-/* Enterprise Dropdown Select Styling */
+.dark .glass-input:focus {
+  box-shadow: 0 0 0 3px rgba(59, 107, 232, 0.2);
+}
+
+.glass-input.invalid {
+  border-left: 3px solid #EF4444 !important;
+  border-color: #EF4444 !important;
+}
+
+/* Dropdown Options Hover Tint */
 .glass-select {
   appearance: none;
   background-color: var(--color-input-bg);
@@ -189,26 +231,27 @@ body {
 .glass-select option {
   background-color: var(--bg-card);
   color: var(--text-primary);
+  padding: 8px;
 }
 
-/* Enterprise Button Styling */
+/* Primary Gradient Submit Button */
 .glass-button {
-  background-color: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
   border: none;
-  border-radius: var(--border-radius);
+  border-radius: 8px;
   padding: 12px 20px;
   color: #FFFFFF !important;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   width: 100%;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  box-shadow: 0 4px 12px rgba(30, 79, 217, 0.2);
 }
 
 .glass-button:hover {
-  background-color: var(--color-primary-hover);
-  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(30, 79, 217, 0.32);
 }
 
 .glass-button:active {
@@ -216,7 +259,7 @@ body {
 }
 
 .glass-button:disabled {
-  background-color: var(--border-card);
+  background: var(--border-card);
   color: var(--text-muted) !important;
   cursor: not-allowed;
   transform: none;
@@ -235,41 +278,54 @@ body {
   justify-content: center;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 200ms ease, background-color 200ms ease, color 200ms ease;
 }
 
 .theme-toggle-btn:hover {
   background-color: var(--border-card);
   color: var(--text-primary);
+  transform: rotate(180deg);
 }
 
 /* Tab Selector Styles for Login/Register Switch */
 .tab-container {
+  position: relative;
   background: var(--bg-body);
-  border-radius: var(--border-radius);
+  border-radius: 10px;
   padding: 4px;
   border: 1px solid var(--border-card);
   display: flex;
   transition: background-color 0.2s, border-color 0.2s;
 }
 
+.tab-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: calc(50% - 4px);
+  background-color: var(--color-primary);
+  border-radius: 6px;
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
 .tab-btn {
-  width: 100%;
+  position: relative;
+  z-index: 1;
+  width: 50%;
   padding: 8px;
   border-radius: 6px;
   font-weight: 600;
   font-size: 14px;
-  border: 1px solid transparent;
+  border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 200ms ease;
 }
 
 .tab-btn.active {
-  background-color: var(--color-primary);
   color: #FFFFFF;
-  border: 1px solid var(--color-primary-hover);
 }
 
 /* Scrollbar styling */
@@ -296,14 +352,80 @@ html, body, #root, .app-container {
   box-sizing: border-box !important;
 }
 
-@keyframes slideInLeft {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
+/* Keyframe Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bannerSlideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseIcon {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 200ms ease forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 300ms ease forwards;
+}
+
+.animate-banner-down {
+  animation: bannerSlideDown 250ms ease forwards;
+}
+
+.icon-pulse {
+  animation: pulseIcon 300ms ease;
+}
+
+/* Stagger Animation Utilities */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+.stagger-banner { animation-delay: 350ms; }
+.stagger-filter { animation-delay: 400ms; }
+.stagger-table { animation-delay: 450ms; }
+
+/* Status & Category Pills Hover Lift */
+.pill-hover {
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+.pill-hover:hover {
+  transform: scale(1.05);
+}
+
+/* Table Row Hover Left Accent Slide */
+tr.row-hover-accent {
+  position: relative;
+  transition: background-color 150ms ease, border-left-color 150ms ease;
+}
+
+tr.row-hover-accent:hover {
+  background-color: var(--bg-secondary) !important;
+  border-left: 3px solid var(--color-primary) !important;
+}
+
+/* Prefers-reduced-motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
-.animate-slide-in-left {
-  animation: slideInLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
+

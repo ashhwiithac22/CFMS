@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { Clock, Paperclip, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Paperclip, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import Badge from './common/Badge';
+import Button from './common/Button';
+import { TableSkeleton } from './common/SkeletonLoader';
+import { useAuth } from '../context/AuthContext';
 
 const ComplaintsTable = ({ 
   complaints, 
@@ -9,435 +14,312 @@ const ComplaintsTable = ({
   onStatusChange, 
   isMobile,
   selectedQuickComplaint,
-  onRowSelect
+  onRowSelect,
+  loading = false
 }) => {
+  const { user } = useAuth();
+  const isSalesExec = user?.role === 'Sales Executive';
   const pageSize = 5;
   const totalPages = Math.ceil(complaints.length / pageSize) || 1;
   const pageComplaints = complaints.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // Hover states dictionary for table rows
   const [hoveredRowId, setHoveredRowId] = useState(null);
+  const shouldReduceMotion = useReducedMotion();
 
-  // Map Category Type pill colors using theme variables
-  const getTypeStyles = (type) => {
+  const getBadgeColorForCategory = (type) => {
     return {
-      'Mismatch': { backgroundColor: 'var(--mismatch-bg)', color: 'var(--mismatch-text)' },
-      'Packaging': { backgroundColor: 'var(--packaging-bg)', color: 'var(--packaging-text)' },
-      'Quality Issues': { backgroundColor: 'var(--quality-bg)', color: 'var(--quality-text)' },
-      'Transport Related': { backgroundColor: 'var(--transport-bg)', color: 'var(--transport-text)' }
-    }[type] || { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' };
+      'Mismatch': 'slate',
+      'Packaging': 'blue',
+      'Quality Issues': 'amber',
+      'Transport Related': 'purple'
+    }[type] || 'slate';
   };
 
-  // Map Status Badge pill colors using theme variables
-  const getStatusStyles = (status) => {
+  const getStatusBorderColor = (status) => {
+    if (status === 'Resolved' || status === 'Completed') return '#10B981';
+    if (status === 'In Progress') return '#F59E0B';
+    if (status && status.includes('Escalated')) return '#EF4444';
+    return '#1E4FD9'; // New / Assigned default blue
+  };
+
+  const getBadgeColorForStatus = (status) => {
     return {
-      'Pending': { backgroundColor: 'var(--pending-bg)', color: 'var(--pending-text)' },
-      'In Progress': { backgroundColor: 'var(--inprogress-bg)', color: 'var(--inprogress-text)' },
-      'Escalated': { backgroundColor: 'var(--escalated-bg)', color: 'var(--escalated-text)' },
-      'Completed': { backgroundColor: 'var(--completed-bg)', color: 'var(--completed-text)' }
-    }[status] || { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' };
+      'New': 'slate',
+      'Assigned': 'slate',
+      'Pending': 'amber',
+      'In Progress': 'blue',
+      'Escalated to Manager': 'red',
+      'Escalated to Warehouse Head': 'red',
+      'Escalated': 'red',
+      'Completed': 'green',
+      'Resolved': 'green'
+    }[status] || 'slate';
+  };
+
+  const getSlaColor = (comp) => {
+    if (comp.status === 'Resolved' || comp.status === 'Completed') {
+      return '#10B981'; // Green for resolved
+    }
+    const hours = comp.hours_left !== undefined ? comp.hours_left : parseInt(comp.sla, 10);
+    if (comp.sla?.includes('Expired') || comp.sla?.includes('!') || (hours !== undefined && hours <= 0)) {
+      return '#EF4444'; // Red for expired
+    }
+    if (isNaN(hours)) return '#10B981';
+    if (hours > 12) return '#10B981'; // Green above 12h
+    if (hours >= 5) return '#F59E0B'; // Amber 12h down to 5h
+    return '#EF4444'; // Red below 5h
+  };
+
+  // Stagger container animation for table rows
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: shouldReduceMotion ? 0 : 0.03
+      }
+    }
+  };
+
+  const rowVariants = {
+    hidden: shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 },
+    show: shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }
   };
 
   // Mobile stacked cards view
   if (isMobile) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
-        {pageComplaints.map((comp) => {
-          const typeStyles = getTypeStyles(comp.type);
-          const statusStyles = getStatusStyles(comp.status);
-          const isSelected = selectedQuickComplaint?.id === comp.id;
-          
-          return (
-            <div 
-              key={comp.id}
-              onClick={(e) => {
-                const tagName = e.target.tagName;
-                if (tagName !== 'BUTTON' && !e.target.closest('button')) {
-                  if (onRowSelect) onRowSelect(comp);
-                }
-              }}
-              style={{
-                backgroundColor: 'var(--bg-primary)',
-                border: isSelected ? '2px solid var(--brand-primary)' : '1px solid var(--border-color)',
-                borderRadius: '12px',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                textAlign: 'left',
-                boxShadow: isSelected ? '0 4px 12px rgba(30,79,217,0.15)' : '0 1px 2px rgba(0,0,0,0.05)',
-                boxSizing: 'border-box',
-                cursor: 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 'bold', color: 'var(--brand-primary)', fontSize: '14px' }}>{comp.id}</span>
-                <span 
-                  style={{ 
-                    padding: '4px 10px', 
-                    borderRadius: '12px', 
-                    fontSize: '11px', 
-                    fontWeight: 'bold', 
-                    ...statusStyles,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusStyles.color }}></span>
-                  {comp.status}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Customer:</span>
-                <strong style={{ color: 'var(--text-primary)' }}>{comp.customer}</strong>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Invoice:</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{comp.invoice}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Type:</span>
-                <span style={{ padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', ...typeStyles }}>
-                  {comp.type}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>SLA Timer:</span>
-                <span style={{ fontWeight: 'bold', color: comp.sla.includes('!') ? 'var(--color-escalated)' : 'var(--color-completed)' }}>
-                  {comp.sla}
-                </span>
-              </div>
-
-              {/* Actions row on mobile (full 44px height targets) */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '4px' }}>
-                <button 
-                  onClick={() => onStatusChange(comp.id, 'In Progress')}
-                  style={{ flex: '1 1 45%', height: '44px', borderRadius: '8px', backgroundColor: '#0F2A4A', color: '#FFFFFF', fontWeight: 'bold', border: 'none', fontSize: '12px', cursor: 'pointer' }}
-                >
-                  Take Action
-                </button>
-                <button 
-                  onClick={() => onStatusChange(comp.id, 'Escalated')}
-                  style={{ flex: '1 1 45%', height: '44px', borderRadius: '8px', border: '1px solid var(--color-pending)', backgroundColor: 'transparent', color: 'var(--color-pending)', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
-                >
-                  Escalate
-                </button>
-                <button 
-                  onClick={() => onStatusChange(comp.id, 'Completed')}
-                  style={{ flex: '1 1 45%', height: '44px', borderRadius: '8px', border: '1px solid var(--color-completed)', backgroundColor: 'transparent', color: 'var(--color-completed)', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
-                >
-                  Complete
-                </button>
-                <button 
-                  onClick={() => onMessageClick(comp)}
-                  style={{ flex: '1 1 45%', height: '44px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'var(--text-secondary)', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
-                >
-                  Message
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Pagination view */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
-          <button
-            onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-            disabled={currentPage === 1}
-            style={{ width: '44px', height: '44px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: currentPage === 1 ? 0.4 : 1 }}
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Page {currentPage} of {totalPages}</span>
-          <button
-            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            style={{ width: '44px', height: '44px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: currentPage === totalPages ? 0.4 : 1 }}
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
+        {loading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading complaints...</div>
+        ) : pageComplaints.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            <motion.div animate={shouldReduceMotion ? {} : { scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 2 }}>
+              <Inbox size={40} style={{ color: 'var(--text-muted)' }} />
+            </motion.div>
+            <span>No complaints found matching selected filters.</span>
+          </div>
+        ) : (
+          pageComplaints.map((comp) => {
+            const isSelected = selectedQuickComplaint?.id === comp.id;
+            const isCompleted = comp.status === 'Completed' || comp.status === 'Resolved';
+            const slaColor = getSlaColor(comp);
+            const borderColor = getStatusBorderColor(comp.status);
+            
+            return (
+              <motion.div 
+                key={comp.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={(e) => {
+                  const tagName = e.target.tagName;
+                  if (tagName !== 'BUTTON' && !e.target.closest('button')) {
+                    if (onRowSelect) onRowSelect(comp);
+                  }
+                }}
+                style={{
+                  backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.12)' : (isSelected ? 'var(--card-selected-bg)' : 'var(--bg-primary)'),
+                  border: isCompleted ? '2px solid #10B981' : (isSelected ? '2px solid var(--brand-primary)' : `2px solid ${borderColor}`),
+                  borderRadius: '12px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  textAlign: 'left',
+                  boxShadow: isSelected ? '0 4px 12px rgba(30,79,217,0.15)' : '0 1px 2px rgba(0,0,0,0.05)',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 'bold', color: 'var(--brand-primary)', fontSize: '14px' }}>{comp.id}</span>
+                  <Badge color={getBadgeColorForStatus(comp.status)} dot>{comp.status}</Badge>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 'bold' }}>{comp.customer} • {comp.invoice}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <Badge color={getBadgeColorForCategory(comp.type)}>{comp.type} - {comp.subtype}</Badge>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: slaColor, fontSize: '12px', fontWeight: 'bold' }}>
+                    <Clock size={12} style={{ color: slaColor }} />
+                    <span>{comp.sla}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  {!isSalesExec && (
+                    <>
+                      <Button size="sm" variant="takeAction" onClick={() => onStatusChange(comp.id, 'In Progress')}>Take Action</Button>
+                      <Button size="sm" variant="complete" onClick={() => onStatusChange(comp.id, 'Complete')}>Complete</Button>
+                      <Button size="sm" variant="escalate" onClick={() => onStatusChange(comp.id, 'Escalate')}>Escalate</Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="message" onClick={() => onMessageClick(comp)}>Message</Button>
+                </div>
+              </motion.div>
+            );
+          })
+        )}
       </div>
     );
   }
 
-  // Desktop tabular layout
   return (
-    <section 
-      style={{ 
-        width: '100%', 
-        border: '1px solid var(--border-color)',
-        borderRadius: '12px', 
-        overflow: 'hidden',
-        backgroundColor: 'var(--bg-primary)',
-        boxSizing: 'border-box'
-      }}
-    >
-      {/* Scoped Horizontal Scroll container */}
-      <div style={{ overflowX: 'auto', width: '100%', boxSizing: 'border-box' }}>
-        <table 
-          style={{ 
-            width: '100%', 
-            minWidth: '1210px', // Exact minimum content width containing 9 columns
-            tableLayout: 'fixed', 
-            borderCollapse: 'collapse',
-            boxSizing: 'border-box'
-          }}
-        >
-          {/* Header Row */}
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px', boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', backgroundColor: 'var(--bg-primary)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '880px', tableLayout: 'fixed' }}>
           <thead>
-            <tr style={{ backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '100px', minWidth: '100px', boxSizing: 'border-box' }}>Complaint ID</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '120px', minWidth: '120px', boxSizing: 'border-box' }}>Customer</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '130px', minWidth: '130px', boxSizing: 'border-box' }}>Invoice No.</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '180px', minWidth: '180px', boxSizing: 'border-box' }}>Category / Type</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '120px', minWidth: '120px', boxSizing: 'border-box' }}>Raised By</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '100px', minWidth: '100px', boxSizing: 'border-box' }}>SLA Timer</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'left', width: '120px', minWidth: '120px', boxSizing: 'border-box' }}>Status</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'center', width: '70px', minWidth: '70px', boxSizing: 'border-box' }}>Attach.</th>
-              <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', textAlign: 'right', width: '330px', minWidth: '330px', boxSizing: 'border-box' }}>Actions</th>
+            <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '14px 10px', width: '95px', minWidth: '95px', boxSizing: 'border-box', textAlign: 'left' }}>Complaint ID</th>
+              <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Customer</th>
+              <th style={{ padding: '14px 10px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left' }}>Invoice #</th>
+              <th style={{ padding: '14px 10px', width: '160px', minWidth: '160px', boxSizing: 'border-box', textAlign: 'left' }}>Category</th>
+              <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Raised By</th>
+              <th style={{ padding: '14px 10px', width: '85px', minWidth: '85px', boxSizing: 'border-box', textAlign: 'left' }}>SLA Timer</th>
+              <th style={{ padding: '14px 10px', width: '105px', minWidth: '105px', boxSizing: 'border-box', textAlign: 'left' }}>Status</th>
+              {isSalesExec && (
+                <th style={{ padding: '14px 6px', width: '55px', minWidth: '55px', boxSizing: 'border-box', textAlign: 'center' }}>Attach</th>
+              )}
+              <th style={{ padding: '14px 10px', width: isSalesExec ? '110px' : '330px', minWidth: isSalesExec ? '110px' : '330px', boxSizing: 'border-box', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
+          {loading ? (
+            <TableSkeleton rows={pageSize} cols={isSalesExec ? 9 : 8} />
+          ) : pageComplaints.length === 0 ? (
+            <tbody>
+              <tr>
+                <td colSpan={isSalesExec ? 9 : 8} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                    <Inbox size={40} style={{ color: 'var(--text-muted)' }} />
+                    <span>No complaints found matching selected filters.</span>
+                  </motion.div>
+                </td>
+              </tr>
+            </tbody>
+          ) : (
+            <motion.tbody variants={containerVariants} initial="hidden" animate="show" style={{ backgroundColor: 'var(--bg-primary)' }}>
+              {pageComplaints.map((comp) => {
+                const slaColor = getSlaColor(comp);
+                const isCompleted = comp.status === 'Completed' || comp.status === 'Resolved';
+                const borderColor = getStatusBorderColor(comp.status);
+                const isRowHovered = hoveredRowId === comp.id;
+                const isSelected = selectedQuickComplaint?.id === comp.id;
 
-          {/* Table Body */}
-          <tbody style={{ backgroundColor: 'var(--bg-primary)' }}>
-            {pageComplaints.map((comp) => {
-              const typeStyles = getTypeStyles(comp.type);
-              const statusStyles = getStatusStyles(comp.status);
-              
-              const isBreached = comp.sla.includes('!');
-              const isApproaching = parseInt(comp.sla) < 10 && !isBreached;
-              
-              let slaColor = 'var(--color-completed)'; // Green
-              if (isBreached) {
-                slaColor = 'var(--color-escalated)'; // Red
-              } else if (isApproaching) {
-                slaColor = 'var(--color-pending)'; // Orange
-              }
-
-              const isRowHovered = hoveredRowId === comp.id;
-              const isSelected = selectedQuickComplaint?.id === comp.id;
-
-              return (
-                <tr
-                  key={comp.id}
-                  onMouseEnter={() => setHoveredRowId(comp.id)}
-                  onMouseLeave={() => setHoveredRowId(null)}
-                  onClick={(e) => {
-                    const tagName = e.target.tagName;
-                    if (tagName !== 'BUTTON' && tagName !== 'INPUT' && tagName !== 'SELECT' && tagName !== 'A' && !e.target.closest('button')) {
-                      if (onRowSelect) onRowSelect(comp);
-                    }
-                  }}
-                  style={{
-                    borderBottom: '1px solid var(--border-color)',
-                    backgroundColor: isSelected ? 'var(--card-selected-bg)' : isRowHovered ? 'var(--bg-secondary)' : 'var(--bg-primary)',
-                    borderLeft: isSelected ? '4px solid var(--brand-primary)' : 'none',
-                    transition: 'background-color 150ms ease',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {/* Complaint ID */}
-                  <td style={{ padding: '14px 16px', width: '100px', minWidth: '100px', boxSizing: 'border-box', textAlign: 'left' }}>
-                    <button 
-                      style={{ 
-                        background: 'transparent', 
-                        border: 'none', 
-                        cursor: 'pointer', 
-                        padding: 0,
-                        color: 'var(--brand-primary)', 
-                        fontWeight: 'bold',
-                        fontSize: '13px',
-                        textDecoration: 'underline'
-                      }}
-                    >
-                      {comp.id}
-                    </button>
-                  </td>
-
-                  {/* Customer */}
-                  <td style={{ padding: '14px 16px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left', fontSize: '13px', color: 'var(--text-primary)', fontWeight: 'bold' }}>
-                    {comp.customer}
-                  </td>
-
-                  {/* Invoice No. */}
-                  <td style={{ padding: '14px 16px', width: '130px', minWidth: '130px', boxSizing: 'border-box', textAlign: 'left', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
-                    {comp.invoice}
-                  </td>
-
-                  {/* Category / Type */}
-                  <td style={{ padding: '14px 16px', width: '180px', minWidth: '180px', boxSizing: 'border-box', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span 
-                        style={{ 
-                          padding: '4px 10px', 
-                          borderRadius: '12px', 
-                          fontSize: '12px', 
-                          fontWeight: 'bold',
-                          width: 'fit-content',
-                          whiteSpace: 'nowrap',
-                          ...typeStyles 
-                        }}
-                      >
-                        {comp.type}
-                      </span>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
-                        {comp.subtype}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Raised By */}
-                  <td style={{ padding: '14px 16px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{comp.raisedBy}</span>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>{comp.date}</span>
-                    </div>
-                  </td>
-
-                  {/* SLA Timer */}
-                  <td style={{ padding: '14px 16px', width: '100px', minWidth: '100px', boxSizing: 'border-box', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', color: slaColor, fontSize: '13px' }}>
-                      <Clock size={14} style={{ color: slaColor }} />
-                      <span>{comp.sla}</span>
-                    </div>
-                  </td>
-
-                  {/* Status */}
-                  <td style={{ padding: '14px 16px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left' }}>
-                    <span 
-                      style={{ 
-                        padding: '4px 10px', 
-                        borderRadius: '12px', 
-                        fontSize: '12px', 
-                        fontWeight: 'bold',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        width: 'fit-content',
-                        ...statusStyles 
-                      }}
-                    >
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusStyles.color }}></span>
-                      {comp.status}
-                    </span>
-                  </td>
-
-                  {/* Attach. */}
-                  <td style={{ padding: '14px 16px', width: '70px', minWidth: '70px', boxSizing: 'border-box', textAlign: 'center' }}>
-                    {comp.attach ? <Paperclip size={14} style={{ color: 'var(--text-secondary)', margin: '0 auto' }} /> : '—'}
-                  </td>
-
-                  {/* Actions cell: 4 buttons side by side */}
-                  <td style={{ padding: '14px 16px', width: '330px', minWidth: '330px', boxSizing: 'border-box', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      
-                      {/* Take Action */}
-                      <button 
-                        onClick={() => onStatusChange(comp.id, 'In Progress')}
-                        style={{ 
-                          height: '28px',
-                          padding: '0 14px',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          borderRadius: '6px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          backgroundColor: '#0F2A4A', 
-                          color: '#FFFFFF',
-                          transition: 'opacity 150ms ease',
-                          boxSizing: 'border-box'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                        type="button"
-                      >
-                        Take Action
+                return (
+                  <motion.tr
+                    key={comp.id}
+                    variants={rowVariants}
+                    onMouseEnter={() => setHoveredRowId(comp.id)}
+                    onMouseLeave={() => setHoveredRowId(null)}
+                    onClick={(e) => {
+                      const tagName = e.target.tagName;
+                      if (tagName !== 'BUTTON' && tagName !== 'INPUT' && tagName !== 'SELECT' && tagName !== 'A' && !e.target.closest('button')) {
+                        if (onRowSelect) onRowSelect(comp);
+                      }
+                    }}
+                    style={{
+                      borderBottom: '1px solid var(--border-color)',
+                      backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.12)' : (isSelected ? 'var(--card-selected-bg)' : isRowHovered ? 'var(--bg-secondary)' : 'var(--bg-primary)'),
+                      borderLeft: isCompleted ? '4px solid #10B981' : (isSelected ? '4px solid var(--brand-primary)' : `4px solid ${borderColor}`),
+                      transition: 'background-color 150ms ease, border-left-color 150ms ease',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <td style={{ padding: '12px 10px', width: '95px', minWidth: '95px', boxSizing: 'border-box', textAlign: 'left' }}>
+                      <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--brand-primary)', fontWeight: 'bold', fontSize: '13px', textDecoration: 'underline' }}>
+                        {comp.id}
                       </button>
+                    </td>
 
-                      {/* Escalate */}
-                      <button 
-                        onClick={() => onStatusChange(comp.id, 'Escalated')}
-                        style={{ 
-                          height: '28px',
-                          padding: '0 14px',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          borderRadius: '6px',
-                          border: '1px solid var(--color-pending)',
-                          cursor: 'pointer',
-                          backgroundColor: 'transparent', 
-                          color: 'var(--color-pending)',
-                          transition: 'background-color 150ms ease',
-                          boxSizing: 'border-box'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--pending-bg)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        type="button"
-                      >
-                        Escalate
-                      </button>
+                    <td style={{ padding: '12px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left', fontSize: '13px', color: 'var(--text-primary)', fontWeight: 'bold' }}>
+                      {comp.customer}
+                    </td>
 
-                      {/* Complete */}
-                      <button 
-                        onClick={() => onStatusChange(comp.id, 'Completed')}
-                        style={{ 
-                          height: '28px',
-                          padding: '0 14px',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          borderRadius: '6px',
-                          border: '1px solid var(--color-completed)',
-                          cursor: 'pointer',
-                          backgroundColor: 'transparent', 
-                          color: 'var(--color-completed)',
-                          transition: 'background-color 150ms ease',
-                          boxSizing: 'border-box'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--completed-bg)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        type="button"
-                      >
-                        Complete
-                      </button>
+                    <td style={{ padding: '12px 10px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
+                      {comp.invoice}
+                    </td>
 
-                      {/* Message */}
-                      <button 
-                        onClick={() => onMessageClick(comp)}
-                        style={{ 
-                          height: '28px',
-                          padding: '0 14px',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border-color)',
-                          cursor: 'pointer',
-                          backgroundColor: 'transparent', 
-                          color: 'var(--text-secondary)',
-                          transition: 'background-color 150ms ease',
-                          boxSizing: 'border-box'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        type="button"
-                      >
-                        Message
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
+                    <td style={{ padding: '12px 10px', width: '160px', minWidth: '160px', boxSizing: 'border-box', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <Badge color={getBadgeColorForCategory(comp.type)}>{comp.type}</Badge>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>{comp.subtype}</span>
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '12px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{comp.raisedBy}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{comp.date}</span>
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '12px 10px', width: '85px', minWidth: '85px', boxSizing: 'border-box', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', color: slaColor, fontSize: '13px' }}>
+                        <Clock size={14} style={{ color: slaColor }} />
+                        <span>{comp.sla}</span>
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '12px 10px', width: '105px', minWidth: '105px', boxSizing: 'border-box', textAlign: 'left' }}>
+                      <Badge color={getBadgeColorForStatus(comp.status)} dot>{comp.status}</Badge>
+                    </td>
+
+                    {isSalesExec && (
+                      <td style={{ padding: '12px 6px', width: '55px', minWidth: '55px', boxSizing: 'border-box', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onMessageClick) onMessageClick(comp);
+                          }}
+                          title={comp.attachment_url ? "Has photo attachment — Click to open messaging" : "Click to open messaging"}
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Paperclip size={15} style={{ color: comp.attachment_url ? 'var(--brand-primary)' : 'var(--text-muted)', opacity: comp.attachment_url ? 1 : 0.6 }} />
+                        </button>
+                      </td>
+                    )}
+
+                    <td style={{ padding: '12px 10px', width: isSalesExec ? '110px' : '330px', minWidth: isSalesExec ? '110px' : '330px', boxSizing: 'border-box', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {!isSalesExec && (
+                          <>
+                            <Button 
+                              size="sm"
+                              variant="takeAction"
+                              onClick={() => onStatusChange(comp.id, 'In Progress')}
+                            >
+                              Take Action
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="complete"
+                              onClick={() => onStatusChange(comp.id, 'Completed')}
+                            >
+                              Complete
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="escalate"
+                              onClick={() => onStatusChange(comp.id, 'Escalate')}
+                            >
+                              Escalate
+                            </Button>
+                          </>
+                        )}
+                        <Button 
+                          size="sm"
+                          variant="message"
+                          onClick={() => onMessageClick(comp)}
+                        >
+                          Message
+                        </Button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                );
+              })}
+            </motion.tbody>
+          )}
         </table>
       </div>
 
-      {/* Pagination & detail summary footer row */}
       <div 
         style={{ 
           display: 'flex', 
@@ -531,7 +413,7 @@ const ComplaintsTable = ({
           </button>
         </div>
       </div>
-    </section>
+    </div>
   );
 };
 

@@ -11,6 +11,8 @@ const { AppError } = require('./utils/errors');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const path = require('path');
+
 // Logging middleware
 app.use(morgan('dev'));
 
@@ -21,6 +23,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Serve static uploaded attachments with CORS headers
+app.use('/uploads', cors, express.static(path.join(__dirname, 'uploads')));
+
 // Global API rate limiter for non-auth requests
 app.use('/api/', (req, res, next) => {
   // Exclude auth routes from general rate limiter since they use authLimiter
@@ -30,11 +35,35 @@ app.use('/api/', (req, res, next) => {
   apiLimiter(req, res, next);
 });
 
+const complaintRoutes = require('./routes/complaint.routes');
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/complaints', complaintRoutes);
 
-// Health check endpoint
+// Health check & root endpoints
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Customer Feedback Management System (CFMS) API Server is running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      messages: '/api/messages'
+    }
+  });
+});
+
+app.get('/api', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CFMS API Endpoints',
+    routes: ['/api/auth', '/api/messages']
+  });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
@@ -74,7 +103,20 @@ async function startServer() {
     try {
       await connectDB();
     } catch (dbErr) {
-      console.warn('WARNING: Database connection failed. Running server in-memory fallback mode.', dbErr.message);
+      if (process.env.ALLOW_MOCK_DB === 'true') {
+        console.warn('===================================================================');
+        console.warn('WARNING: Database connection failed. ALLOW_MOCK_DB=true is set.');
+        console.warn('Running server in IN-MEMORY MOCK FALLBACK MODE.', dbErr.message);
+        console.warn('===================================================================');
+      } else {
+        console.error('===================================================================');
+        console.error('FATAL DATABASE ERROR: Refusing to start server in silent mock mode.');
+        console.error(`Error Details: ${dbErr.message}`);
+        console.error('Please verify SQL Server is running and port configuration is correct.');
+        console.error('To explicitly enable mock mode for testing, set ALLOW_MOCK_DB=true in .env');
+        console.error('===================================================================');
+        process.exit(1);
+      }
     }
 
     app.listen(PORT, () => {

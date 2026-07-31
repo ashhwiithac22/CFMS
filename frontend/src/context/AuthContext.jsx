@@ -34,17 +34,15 @@ export const AuthProvider = ({ children }) => {
         if (meResponse.ok) {
           const meResult = await meResponse.json();
           const fetchedUser = meResult.data.user;
-          const pref = fetchedUser.theme_preference || 'light';
-          localStorage.setItem('theme_preference', pref);
-          // Format role and department names from backend output structure
           setUser({
             id: fetchedUser.id,
+            username: fetchedUser.username,
             email: fetchedUser.email,
             firstName: fetchedUser.first_name,
             lastName: fetchedUser.last_name,
-            role: fetchedUser.role_name,
-            department: fetchedUser.department_name,
-            themePreference: pref
+            role: fetchedUser.role || fetchedUser.role_name,
+            warehouseId: fetchedUser.warehouse_id,
+            warehouseName: fetchedUser.warehouse_name
           });
           localStorage.setItem('user_logged_in', 'true');
           return token;
@@ -92,25 +90,7 @@ export const AuthProvider = ({ children }) => {
     const result = await response.json();
     const fetchedUser = result.data.user;
     
-    // Retrieve local theme preference active at the login page
-    const localTheme = localStorage.getItem('theme_preference') || 'light';
-    
-    // If user's theme in DB is light/null, and local theme is dark, save dark to database
-    if ((fetchedUser.themePreference === 'light' || !fetchedUser.themePreference) && localTheme === 'dark') {
-      fetchedUser.themePreference = 'dark';
-      setAccessToken(result.data.accessToken);
-      try {
-        await api.put('/auth/theme', { theme: 'dark' });
-      } catch (err) {
-        console.error('Failed to save initial login theme preference to database:', err);
-      }
-    } else {
-      setAccessToken(result.data.accessToken);
-    }
-    
-    // Save theme preference to localStorage so ThemeContext picks it up synchronously
-    localStorage.setItem('theme_preference', fetchedUser.themePreference);
-    
+    setAccessToken(result.data.accessToken);
     setUser(fetchedUser);
     localStorage.setItem('user_logged_in', 'true');
     return result;

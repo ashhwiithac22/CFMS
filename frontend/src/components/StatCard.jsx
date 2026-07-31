@@ -1,8 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import Card from './common/Card';
+
+// Custom hook to animate number count-up on mount/change
+const useCountUp = (targetValue, duration = 500) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    let startTimestamp = null;
+    const startValue = 0;
+    const endValue = typeof targetValue === 'number' ? targetValue : parseInt(targetValue, 10) || 0;
+
+    if (endValue === 0) {
+      setDisplayValue(0);
+      return;
+    }
+
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // Ease-out cubic formula
+      const easeOutProgress = 1 - Math.pow(1 - progress, 3);
+      const current = Math.floor(startValue + (endValue - startValue) * easeOutProgress);
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        window.requestAnimationFrame(step);
+      } else {
+        setDisplayValue(endValue);
+      }
+    };
+
+    const animFrame = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animFrame);
+  }, [targetValue, duration]);
+
+  return displayValue;
+};
 
 const StatCard = ({ title, value, icon, color, status, activeStatus, onClick }) => {
   const isActive = activeStatus === status;
   const [isHovered, setIsHovered] = useState(false);
+  const animatedValue = useCountUp(value, 550);
+  const shouldReduceMotion = useReducedMotion();
 
   // Status-colored 32px circular badge color mapping using CSS variables
   const badgeColors = {
@@ -14,7 +54,7 @@ const StatCard = ({ title, value, icon, color, status, activeStatus, onClick }) 
   }[color] || { bg: 'var(--bg-secondary)', text: 'var(--text-secondary)' };
 
   return (
-    <div
+    <Card
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -24,14 +64,10 @@ const StatCard = ({ title, value, icon, color, status, activeStatus, onClick }) 
         borderRadius: '12px',
         padding: '20px',
         boxShadow: isActive 
-          ? '0 4px 6px -1px rgba(0, 0, 0, 0.08)' 
+          ? '0 4px 12px rgba(30, 79, 217, 0.18)' 
           : isHovered 
-            ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' 
+            ? '0 10px 20px -3px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' 
             : '0 1px 3px rgba(0, 0, 0, 0.06)',
-        transform: (!isActive && isHovered) ? 'translateY(-2px)' : 'none',
-        transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
-        cursor: 'pointer',
-        userSelect: 'none',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
@@ -51,7 +87,9 @@ const StatCard = ({ title, value, icon, color, status, activeStatus, onClick }) 
         >
           {title}
         </span>
-        <div 
+        <motion.div 
+          animate={isHovered && !shouldReduceMotion ? { scale: 1.15 } : { scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
           style={{ 
             width: '32px', 
             height: '32px', 
@@ -65,10 +103,10 @@ const StatCard = ({ title, value, icon, color, status, activeStatus, onClick }) 
           }}
         >
           {React.cloneElement(icon, { size: 16, style: { color: badgeColors.text } })}
-        </div>
+        </motion.div>
       </div>
 
-      {/* Large value text */}
+      {/* Large animated count-up value text */}
       <span 
         style={{ 
           fontSize: '32px', 
@@ -78,9 +116,9 @@ const StatCard = ({ title, value, icon, color, status, activeStatus, onClick }) 
           textAlign: 'left'
         }}
       >
-        {value}
+        {animatedValue}
       </span>
-    </div>
+    </Card>
   );
 };
 

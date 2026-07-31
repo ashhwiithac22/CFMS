@@ -69,3 +69,10 @@ test-results/
 # ============================
 .DS_Store
 Thumbs.db
+
+# ============================
+# Scratch scripts
+# ============================
+scratch/
+backend/scratch/
+frontend/scratch/

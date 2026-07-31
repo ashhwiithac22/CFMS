@@ -5,19 +5,21 @@ const cors = require('cors');
 // Rate limiting setup for authentication endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // limit each IP to 15 login/register requests per windowMs
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  skip: (req) => req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1',
   message: {
     status: 429,
     message: 'Too many authentication attempts from this IP, please try again after 15 minutes'
   },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // General rate limiter for non-auth requests
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 50000, // higher limit for local development testing
+  skip: (req) => req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1',
   message: {
     status: 429,
     message: 'Too many requests from this IP, please try again later'
@@ -35,8 +37,12 @@ const corsOptions = {
 };
 
 module.exports = {
-  helmet: helmet(),
+  helmet: helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false
+  }),
   cors: cors(corsOptions),
+  corsOptions,
   authLimiter,
   apiLimiter
 };

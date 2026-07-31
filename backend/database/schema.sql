@@ -1,21 +1,42 @@
--- DDL Schema Script for SQL Server Express
--- Creates Tables: Roles, Departments, Users, AuditLogs
+-- Redesigned DDL Schema Script for SQL Server Express
+-- Creates Tables: Warehouses, Users, ComplaintTypes, ComplaintSubtypes, Complaints, ComplaintHistory, Messages, AuditLogs
 
--- Roles Table
-IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Roles' and xtype='U')
+-- 1. Warehouses Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Warehouses' and xtype='U')
 BEGIN
-    CREATE TABLE Roles (
+    CREATE TABLE Warehouses (
         id INT IDENTITY(1,1) PRIMARY KEY,
-        name VARCHAR(50) UNIQUE NOT NULL,
-        description VARCHAR(255) NULL,
+        name VARCHAR(100) UNIQUE NOT NULL,
+        location VARCHAR(255) NOT NULL,
         created_at DATETIME DEFAULT GETDATE()
     );
 END;
 
--- Departments Table
-IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Departments' and xtype='U')
+-- 2. Users Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Users' and xtype='U')
 BEGIN
-    CREATE TABLE Departments (
+    CREATE TABLE Users (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        role VARCHAR(50) NOT NULL, -- 'Sales Executive', 'Warehouse Team', 'Warehouse Manager', 'Administrator'
+        warehouse_id INT FOREIGN KEY REFERENCES Warehouses(id) NULL,
+        status VARCHAR(20) DEFAULT 'Active',
+        refresh_token VARCHAR(500) NULL,
+        reset_token VARCHAR(255) NULL,
+        reset_token_expiry DATETIME NULL,
+        created_at DATETIME DEFAULT GETDATE(),
+        updated_at DATETIME DEFAULT GETDATE()
+    );
+END;
+
+-- 3. ComplaintTypes Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ComplaintTypes' and xtype='U')
+BEGIN
+    CREATE TABLE ComplaintTypes (
         id INT IDENTITY(1,1) PRIMARY KEY,
         name VARCHAR(100) UNIQUE NOT NULL,
         description VARCHAR(255) NULL,
@@ -23,51 +44,59 @@ BEGIN
     );
 END;
 
--- Users Table
-IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Users' and xtype='U')
+-- 4. ComplaintSubtypes Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ComplaintSubtypes' and xtype='U')
 BEGIN
-    CREATE TABLE Users (
+    CREATE TABLE ComplaintSubtypes (
         id INT IDENTITY(1,1) PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        first_name VARCHAR(100) NOT NULL,
-        last_name VARCHAR(100) NOT NULL,
-        role_id INT FOREIGN KEY REFERENCES Roles(id),
-        department_id INT FOREIGN KEY REFERENCES Departments(id) NULL,
-        refresh_token VARCHAR(500) NULL,
-        reset_token VARCHAR(255) NULL,
-        reset_token_expiry DATETIME NULL,
-        status VARCHAR(20) DEFAULT 'Active', -- 'Active', 'Suspended'
-        theme_preference VARCHAR(10) DEFAULT 'light',
+        complaint_type_id INT FOREIGN KEY REFERENCES ComplaintTypes(id) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        created_at DATETIME DEFAULT GETDATE()
+    );
+END;
+
+-- 5. Complaints Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Complaints' and xtype='U')
+BEGIN
+    CREATE TABLE Complaints (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        complaint_number VARCHAR(50) UNIQUE NOT NULL,
+        sales_executive_id INT FOREIGN KEY REFERENCES Users(id) NOT NULL,
+        warehouse_id INT FOREIGN KEY REFERENCES Warehouses(id) NOT NULL,
+        customer_code VARCHAR(100) NOT NULL,
+        invoice_number VARCHAR(100) NOT NULL,
+        complaint_type_id INT FOREIGN KEY REFERENCES ComplaintTypes(id) NOT NULL,
+        complaint_subtype_id INT FOREIGN KEY REFERENCES ComplaintSubtypes(id) NULL,
+        description NVARCHAR(MAX) NOT NULL,
+        attachment_url VARCHAR(500) NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'New', -- 'New', 'Assigned', 'In Progress', 'Escalated to Manager', 'Escalated to Warehouse Head', 'Resolved', 'Closed'
+        assigned_warehouse_team_id INT FOREIGN KEY REFERENCES Users(id) NULL,
+        raised_at DATETIME DEFAULT GETDATE(),
+        warehouse_team_deadline DATETIME NULL,
+        warehouse_team_responded_at DATETIME NULL,
+        escalated_to_manager_at DATETIME NULL,
+        manager_deadline DATETIME NULL,
+        manager_responded_at DATETIME NULL,
+        escalated_to_warehouse_head_at DATETIME NULL,
         created_at DATETIME DEFAULT GETDATE(),
         updated_at DATETIME DEFAULT GETDATE()
     );
 END;
 
--- Migration check to add theme_preference if Users table exists without it
-IF EXISTS (SELECT * FROM sysobjects WHERE name='Users' and xtype='U')
+-- 6. ComplaintHistory Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ComplaintHistory' and xtype='U')
 BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'theme_preference')
-    BEGIN
-        ALTER TABLE Users ADD theme_preference VARCHAR(10) DEFAULT 'light';
-    END;
-END;
-
--- AuditLogs Table
-IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='AuditLogs' and xtype='U')
-BEGIN
-    CREATE TABLE AuditLogs (
+    CREATE TABLE ComplaintHistory (
         id INT IDENTITY(1,1) PRIMARY KEY,
-        user_id INT FOREIGN KEY REFERENCES Users(id) ON DELETE SET NULL NULL,
-        action VARCHAR(50) NOT NULL, -- 'LOGIN', 'LOGOUT', 'PASSWORD_RESET', 'PASSWORD_CHANGE', 'REGISTER'
-        ip_address VARCHAR(45) NOT NULL,
-        user_agent VARCHAR(255) NOT NULL,
-        details VARCHAR(500) NULL,
+        complaint_id INT FOREIGN KEY REFERENCES Complaints(id) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        performed_by INT FOREIGN KEY REFERENCES Users(id) NULL,
+        notes NVARCHAR(MAX) NULL,
         timestamp DATETIME DEFAULT GETDATE()
     );
 END;
 
--- Messages Table
+-- 7. Messages Table
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Messages' and xtype='U')
 BEGIN
     CREATE TABLE Messages (
@@ -77,8 +106,23 @@ BEGIN
         sender_role VARCHAR(50) NOT NULL,
         recipient_id INT NULL,
         recipient_role VARCHAR(50) NULL,
-        message_text NVARCHAR(MAX) NOT NULL,
-        read_status VARCHAR(20) DEFAULT 'Unread', -- 'Unread', 'Read'
+        message_text NVARCHAR(MAX) NULL,
+        attachment_url VARCHAR(500) NULL,
+        read_status VARCHAR(20) DEFAULT 'Unread',
         created_at DATETIME DEFAULT GETDATE()
+    );
+END;
+
+-- 8. AuditLogs Table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='AuditLogs' and xtype='U')
+BEGIN
+    CREATE TABLE AuditLogs (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        user_id INT FOREIGN KEY REFERENCES Users(id) ON DELETE SET NULL NULL,
+        action VARCHAR(100) NOT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        user_agent VARCHAR(255) NOT NULL,
+        details VARCHAR(500) NULL,
+        timestamp DATETIME DEFAULT GETDATE()
     );
 END;

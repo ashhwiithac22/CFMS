@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   FileSpreadsheet, Clock, RefreshCw, ShieldAlert, CheckSquare 
@@ -11,13 +12,11 @@ import SlaAlertBanner from '../components/SlaAlertBanner';
 import FilterTabs from '../components/FilterTabs';
 import ComplaintsTable from '../components/ComplaintsTable';
 import MessagePanel from '../components/MessagePanel';
-import QuickMessageBar from '../components/QuickMessageBar';
 import { api } from '../services/api';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { logout, user } = useAuth();
-
-
 
   // Navigation and dropdown states
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -53,6 +52,7 @@ const Dashboard = () => {
   const [messagePanelOpen, setMessagePanelOpen] = useState(false);
   const [replyToComplaint, setReplyToComplaint] = useState(null);
   const [messageText, setMessageText] = useState('');
+  const [attachmentFile, setAttachmentFile] = useState(null);
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedQuickComplaint, setSelectedQuickComplaint] = useState(null);
@@ -70,70 +70,107 @@ const Dashboard = () => {
     }
   };
 
+  const fetchComplaints = async () => {
+    try {
+      const res = await api.get('/complaints');
+      if (res.ok) {
+        const data = await res.json();
+        setComplaints(data.data.complaints || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch complaints:', err);
+    }
+  };
+
   useEffect(() => {
     refreshUnreadCount();
-    const interval = setInterval(refreshUnreadCount, 8000);
+    fetchComplaints();
+    const interval = setInterval(() => {
+      refreshUnreadCount();
+      fetchComplaints();
+    }, 8000);
     return () => clearInterval(interval);
   }, []);
 
-  // Mock complaints data matching the Tirupur Warehouse QA Matrix reference exactly
-  const [complaints, setComplaints] = useState([
-    { id: 'CMP-0041', customer: 'CUST-10482', invoice: 'INV-2024-3812', type: 'Mismatch', subtype: 'Size Mismatch', raisedBy: 'Arun M.', date: '15 Jul, 08:10', sla: '6h', status: 'Pending', priority: 'High', department: 'Sales', attach: true },
-    { id: 'CMP-0040', customer: 'CUST-20317', invoice: 'INV-2024-3801', type: 'Packaging', subtype: 'Torn Packet', raisedBy: 'Priya K.', date: '15 Jul, 07:50', sla: '7h', status: 'In Progress', priority: 'Medium', department: 'Warehouse', attach: false },
-    { id: 'CMP-0039', customer: 'CUST-10118', invoice: 'INV-2024-3798', type: 'Transport Related', subtype: 'Delayed Delivery', raisedBy: 'Selvam R.', date: '14 Jul, 22:30', sla: '26h !', status: 'Escalated', priority: 'High', department: 'Sales', attach: true },
-    { id: 'CMP-0038', customer: 'CUST-30091', invoice: 'INV-2024-3791', type: 'Quality Issues', subtype: 'Fabric Defect', raisedBy: 'Deepa V.', date: '14 Jul, 18:45', sla: '18h', status: 'In Progress', priority: 'Medium', department: 'Warehouse', attach: true },
-    { id: 'CMP-0037', customer: 'CUST-10882', invoice: 'INV-2024-3784', type: 'Mismatch', subtype: 'Color Mismatch', raisedBy: 'Rajan P.', date: '14 Jul, 15:20', sla: '29h !', status: 'Escalated', priority: 'High', department: 'Sales', attach: false },
-    { id: 'CMP-0036', customer: 'CUST-20450', invoice: 'INV-2024-3779', type: 'Packaging', subtype: 'Missing Label', raisedBy: 'Meena S.', date: '14 Jul, 12:05', sla: '12h', status: 'Completed', priority: 'Low', department: 'Warehouse', attach: false },
-    { id: 'CMP-0035', customer: 'CUST-10231', invoice: 'INV-2024-3770', type: 'Quality Issues', subtype: 'Stitching Issue', raisedBy: 'Kumar A.', date: '14 Jul, 09:55', sla: '5h', status: 'Pending', priority: 'Medium', department: 'Warehouse', attach: true },
-    { id: 'CMP-0034', customer: 'CUST-30502', invoice: 'INV-2024-3762', type: 'Transport Related', subtype: 'Wrong Routing', raisedBy: 'Geetha L.', date: '13 Jul, 20:30', sla: '31h !', status: 'Escalated', priority: 'High', department: 'Sales', attach: true },
-    { id: 'CMP-0033', customer: 'CUST-10701', invoice: 'INV-2024-3755', type: 'Mismatch', subtype: 'Quantity Mismatch', raisedBy: 'Balan T.', date: '13 Jul, 16:40', sla: '22h', status: 'In Progress', priority: 'Medium', department: 'Sales', attach: false },
-    { id: 'CMP-0032', customer: 'CUST-20099', invoice: 'INV-2024-3748', type: 'Packaging', subtype: 'Incorrect Box', raisedBy: 'Nisha R.', date: '13 Jul, 14:15', sla: '3h', status: 'Completed', priority: 'Low', department: 'Warehouse', attach: false },
-    { id: 'CMP-0031', customer: 'CUST-30310', invoice: 'INV-2024-3741', type: 'Quality Issues', subtype: 'Print Fade', raisedBy: 'Suresh V.', date: '13 Jul, 11:00', sla: '14h', status: 'Completed', priority: 'Medium', department: 'Warehouse', attach: true },
-    { id: 'CMP-0030', customer: 'CUST-10654', invoice: 'INV-2024-3735', type: 'Transport Related', subtype: 'Damage in Transit', raisedBy: 'Selvam R.', date: '13 Jul, 08:20', sla: '9h', status: 'Pending', priority: 'High', department: 'Sales', attach: true }
-  ]);
+  // Initialize clean empty complaints state
+  const [complaints, setComplaints] = useState([]);
 
   const handleLogout = async () => {
     await logout();
     window.location.href = '/login';
   };
 
-  const handleStatusChange = (id, newStatus) => {
-    setComplaints(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
-  };
-
-  const handleMessageClick = async (comp) => {
-    setReplyToComplaint(comp);
-    setMessagePanelOpen(true);
+  const handleStatusChange = async (id, newStatus) => {
     try {
-      const res = await api.get(`/messages/thread/${comp.id}`);
+      const res = await api.put(`/complaints/${id}/status`, { action: newStatus });
       if (res.ok) {
-        const data = await res.json();
-        setMessages(data.data.messages);
-        refreshUnreadCount();
+        fetchComplaints();
       }
     } catch (err) {
-      console.error('Failed to load message thread:', err);
+      console.error('Failed to update complaint status:', err);
     }
   };
 
+  const fetchThreadForRecipient = useCallback(async (complaintId, recipientId) => {
+    try {
+      const url = recipientId 
+        ? `/messages/thread/${complaintId}?recipient_id=${recipientId}` 
+        : `/messages/thread/${complaintId}`;
+      const res = await api.get(url);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.data.messages);
+      }
+    } catch (err) {
+      console.error('Failed to load scoped message thread:', err);
+    }
+  }, []);
+
+  const handleMessageClick = (comp) => {
+    setReplyToComplaint(comp);
+    setMessageText('');
+    setAttachmentFile(null);
+    setMessages([]); // Clear thread immediately to prevent stale flash
+    setMessagePanelOpen(true);
+    refreshUnreadCount();
+
+    // Auto-focus text input and scroll smoothly into view
+    setTimeout(() => {
+      const inputEl = document.querySelector('#quick-message-input') || document.querySelector('input[placeholder*="Type"]');
+      if (inputEl) {
+        inputEl.focus();
+        inputEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 120);
+  };
+
+  const [selectedRecipient, setSelectedRecipient] = useState(null);
+
   const handleSendMessageSubmit = async (e) => {
     e.preventDefault();
-    if (!messageText.trim() || !replyToComplaint) return;
-    const recipientRole = replyToComplaint.raisedBy === 'System Admin' ? 'Administrator' : 'Sales Executive';
+    if ((!messageText.trim() && !attachmentFile) || !replyToComplaint) return;
+
+    const recipientRole = selectedRecipient?.role || (replyToComplaint.raisedBy === 'System Admin' ? 'Administrator' : 'Warehouse Team');
+    const recipientId = selectedRecipient?.id || null;
+
     try {
-      const res = await api.post('/messages', {
-        complaint_id: replyToComplaint.id,
-        message_text: messageText,
-        recipient_role: recipientRole
-      });
+      const formData = new FormData();
+      formData.append('complaint_id', replyToComplaint.id);
+      formData.append('message_text', messageText.trim());
+      formData.append('recipient_role', recipientRole);
+      if (recipientId) {
+        formData.append('recipient_id', recipientId);
+      }
+      if (attachmentFile) {
+        formData.append('attachment', attachmentFile);
+      }
+
+      const res = await api.postFormData('/messages', formData);
       if (res.ok) {
         setMessageText('');
-        // Reload thread list
-        const threadRes = await api.get(`/messages/thread/${replyToComplaint.id}`);
-        if (threadRes.ok) {
-          const threadData = await threadRes.json();
-          setMessages(threadData.data.messages);
-        }
+        setAttachmentFile(null);
+        // Reload recipient-scoped thread list
+        await fetchThreadForRecipient(replyToComplaint.id, recipientId);
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -142,7 +179,10 @@ const Dashboard = () => {
 
   // Filter complaints based on selection
   const filteredComplaints = complaints.filter(c => {
-    if (selectedStatus !== 'All' && c.status !== selectedStatus) return false;
+    if (selectedStatus === 'Pending' && !(c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New')) return false;
+    if (selectedStatus === 'In Progress' && c.status !== 'In Progress') return false;
+    if (selectedStatus === 'Escalated' && !(c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed'))) return false;
+    if (selectedStatus === 'Completed' && !(c.status === 'Completed' || c.status === 'Resolved')) return false;
     if (selectedDept !== 'All' && c.type !== selectedDept) return false;
     if (selectedPriority !== 'All' && c.priority !== selectedPriority) return false;
     if (searchQuery.trim()) {
@@ -171,12 +211,12 @@ const Dashboard = () => {
     return b.id.localeCompare(a.id);
   });
 
-  // KPI count statistics
+  // KPI count statistics calculated dynamically from current scoped complaint records
   const totalCount = complaints.length;
-  const pendingCount = complaints.filter(c => c.status === 'Pending').length;
+  const pendingCount = complaints.filter(c => c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New').length;
   const inprogressCount = complaints.filter(c => c.status === 'In Progress').length;
-  const escalatedCount = complaints.filter(c => c.status === 'Escalated').length;
-  const completedCount = complaints.filter(c => c.status === 'Completed').length;
+  const escalatedCount = complaints.filter(c => c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed')).length;
+  const completedCount = complaints.filter(c => c.status === 'Completed' || c.status === 'Resolved').length;
 
   return (
     <div className="min-h-screen flex flex-col select-none" style={{ backgroundColor: 'var(--bg-secondary)', minHeight: '100vh' }}>
@@ -185,25 +225,36 @@ const Dashboard = () => {
       <Navbar 
         profileDropdownOpen={profileDropdownOpen}
         setProfileDropdownOpen={setProfileDropdownOpen}
-        handleLogout={handleLogout}
+        handleLogout={logout}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         isDesktop={isDesktop}
+        unreadCount={unreadCount}
+        onNotificationSelect={(compNumber) => {
+          const comp = complaints.find(c => c.id === compNumber || String(c.id) === String(compNumber));
+          if (comp) {
+            handleMessageClick(comp);
+          }
+        }}
       />
 
       <div className="flex-1 flex overflow-hidden w-full max-w-full" style={{ overflowX: 'hidden', height: 'calc(100vh - 64px)' }}>
         
-        {/* 2. SIDEBAR */}
         <Sidebar 
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          handleLogout={handleLogout}
+          setActiveTab={(tab) => {
+            if (tab === 'Raise Complaint') {
+              navigate('/raise-complaint');
+            } else {
+              setActiveTab(tab);
+            }
+          }}
+          handleLogout={logout}
           isDesktop={isDesktop}
           sidebarOpen={sidebarOpen}
           onCloseSidebar={() => setSidebarOpen(false)}
           unreadMessagesCount={unreadCount}
         />
 
-        {/* MAIN BODY AREA */}
         <main 
           style={{ 
             flex: 1, 
@@ -217,15 +268,16 @@ const Dashboard = () => {
             boxSizing: 'border-box'
           }}
         >
-          
-          {/* 3. DASHBOARD PAGE HEADER & TOOLBAR */}
-          <DashboardHeader 
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-          />
+          <div className="animate-fade-in">
+            <DashboardHeader 
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onRaiseComplaint={() => navigate('/raise-complaint')}
+            />
+          </div>
 
-          {/* 4. STAT CARDS ROW */}
           <section 
+            className="animate-slide-up stagger-1"
             style={{ 
               display: 'grid', 
               gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(1, 1fr)', 
@@ -234,112 +286,59 @@ const Dashboard = () => {
               boxSizing: 'border-box'
             }}
           >
-            <StatCard 
-              title="Total Logs" 
-              value={totalCount} 
-              icon={<FileSpreadsheet size={16} />} 
-              color="slate"
-              status="All"
-              activeStatus={selectedStatus}
-              onClick={() => setSelectedStatus('All')}
-            />
-            <StatCard 
-              title="Pending" 
-              value={pendingCount} 
-              icon={<Clock size={16} />} 
-              color="amber"
-              status="Pending"
-              activeStatus={selectedStatus}
-              onClick={() => setSelectedStatus('Pending')}
-            />
-            <StatCard 
-              title="In Progress" 
-              value={inprogressCount} 
-              icon={<RefreshCw size={16} />} 
-              color="blue"
-              status="In Progress"
-              activeStatus={selectedStatus}
-              onClick={() => setSelectedStatus('In Progress')}
-            />
-            <StatCard 
-              title="Escalated" 
-              value={escalatedCount} 
-              icon={<ShieldAlert size={16} />} 
-              color="red"
-              status="Escalated"
-              activeStatus={selectedStatus}
-              onClick={() => setSelectedStatus('Escalated')}
-            />
-            <StatCard 
-              title="Completed" 
-              value={completedCount} 
-              icon={<CheckSquare size={16} />} 
-              color="green"
-              status="Completed"
-              activeStatus={selectedStatus}
-              onClick={() => setSelectedStatus('Completed')}
-            />
+            <StatCard title="Total Logs" value={totalCount} icon={<FileSpreadsheet size={16} />} color="slate" status="All" activeStatus={selectedStatus} onClick={() => setSelectedStatus('All')} />
+            <StatCard title="Pending" value={pendingCount} icon={<Clock size={16} />} color="amber" status="Pending" activeStatus={selectedStatus} onClick={() => setSelectedStatus('Pending')} />
+            <StatCard title="In Progress" value={inprogressCount} icon={<RefreshCw size={16} />} color="blue" status="In Progress" activeStatus={selectedStatus} onClick={() => setSelectedStatus('In Progress')} />
+            <StatCard title="Escalated" value={escalatedCount} icon={<ShieldAlert size={16} />} color="red" status="Escalated" activeStatus={selectedStatus} onClick={() => setSelectedStatus('Escalated')} />
+            <StatCard title="Completed" value={completedCount} icon={<CheckSquare size={16} />} color="green" status="Completed" activeStatus={selectedStatus} onClick={() => setSelectedStatus('Completed')} />
           </section>
 
-          {/* 5. SLA BREACH ALERT WARNING BANNER */}
-          <SlaAlertBanner breachCount={3} />
+          <div className="stagger-banner">
+            <SlaAlertBanner breachCount={3} />
+          </div>
 
-          {/* 6. PILL FILTER TABS ROW */}
-          <FilterTabs 
-            selectedStatus={selectedStatus}
-            setSelectedStatus={setSelectedStatus}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            selectedDept={selectedDept}
-            setSelectedDept={setSelectedDept}
-            counts={{
-              all: totalCount,
-              pending: pendingCount,
-              inprogress: inprogressCount,
-              escalated: escalatedCount,
-              completed: completedCount
-            }}
-            isMobile={isMobile}
-          />
+          <div className="animate-slide-up stagger-filter" style={{ position: 'relative', zIndex: 100 }}>
+            <FilterTabs 
+              selectedStatus={selectedStatus}
+              setSelectedStatus={setSelectedStatus}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              selectedDept={selectedDept}
+              setSelectedDept={setSelectedDept}
+              counts={{ all: totalCount, pending: pendingCount, inprogress: inprogressCount, escalated: escalatedCount, completed: completedCount }}
+              isMobile={isMobile}
+            />
+          </div>
 
-          {/* 7. COMPLAINTS TABLE */}
-          <ComplaintsTable 
-            complaints={sortedComplaints}
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            onMessageClick={handleMessageClick}
-            onStatusChange={handleStatusChange}
-            isMobile={isMobile}
-            selectedQuickComplaint={selectedQuickComplaint}
-            onRowSelect={setSelectedQuickComplaint}
-          />
+          <div className="animate-slide-up stagger-table" style={{ position: 'relative', zIndex: 10 }}>
+            <ComplaintsTable 
+              complaints={sortedComplaints}
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              onMessageClick={handleMessageClick}
+              onStatusChange={handleStatusChange}
+              isMobile={isMobile}
+              selectedQuickComplaint={selectedQuickComplaint}
+              onRowSelect={setSelectedQuickComplaint}
+            />
+          </div>
 
-          {/* 8. INLINE REPLY PANEL */}
           <MessagePanel 
             replyToComplaint={replyToComplaint}
             messageText={messageText}
             setMessageText={setMessageText}
+            attachmentFile={attachmentFile}
+            setAttachmentFile={setAttachmentFile}
+            setSelectedRecipient={setSelectedRecipient}
             onSubmit={handleSendMessageSubmit}
-            onClose={() => { setMessagePanelOpen(false); setReplyToComplaint(null); }}
+            onClose={() => { setMessagePanelOpen(false); setReplyToComplaint(null); setSelectedQuickComplaint(null); setAttachmentFile(null); setMessages([]); }}
             messages={messages}
+            setMessages={setMessages}
+            onFetchThread={fetchThreadForRecipient}
             currentUserId={user?.id || user?.userId}
           />
-
         </main>
       </div>
-
-      {/* Persistent Quick Message Pinned Input Bar */}
-      <QuickMessageBar 
-        selectedComplaint={selectedQuickComplaint}
-        onMessageSent={(complaintId) => {
-          refreshUnreadCount();
-          if (replyToComplaint && replyToComplaint.id === complaintId) {
-            handleMessageClick(replyToComplaint);
-          }
-        }}
-        isMobile={isMobile}
-      />
-
     </div>
   );
 };

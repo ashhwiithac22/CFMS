@@ -6,6 +6,7 @@ const SlaAlertBanner = ({ breachCount }) => {
 
   return (
     <section 
+      className="animate-banner-down"
       style={{ 
         width: '100%',
         marginTop: '16px',
