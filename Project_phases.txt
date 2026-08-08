@@ -1,0 +1,91 @@
+FEATURES IN THE PROJECT
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Authentication
+JWT-based user login
+JWT-based access token authentication (15-minute expiry)
+JWT-based refresh token flow (7-day expiry)
+Password hashing with bcrypt
+Forgot password flow (generates reset token, email link via Ethereal SMTP)
+Reset password validation and submission
+Authenticated user password change
+Role-based route protection on frontend (Sales Executive restricted routes)
+Role-based access control middleware on backend
+
+
+Database
+Warehouses table (location and metadata)
+Users table (profiles, roles, warehouse scoping, and tokens)
+ComplaintTypes table (main categories)
+ComplaintSubtypes table (subcategories tied to categories)
+Complaints table (main transactional records, deadlines, and state)
+ComplaintHistory table (audit trail for status transitions)
+Messages table (communication log and attachment references)
+AuditLogs table (auth event audit logs)
+Foreign key constraints linking Users, Warehouses, ComplaintTypes, ComplaintSubtypes, Complaints, ComplaintHistory, Messages, and AuditLogs
+
+
+Complaint Management
+Raising complaints with invoice details, customer code, warehouse, category, and description (Sales Executive only)
+Photo upload support during complaint creation
+Scoped data visibility:
+Sales Executive: Restricted to complaints raised by themselves
+Warehouse Team: Restricted to active complaints in their assigned warehouse
+Warehouse Manager: Restricted to active, escalated complaints in their assigned warehouse
+Administrator: Global visibility across all warehouses
+Interactive status updates (Take Action, Complete, Manual Escalation) by Warehouse Team / Manager
+
+
+SLA & Escalation
+Automatic SLA checker on backend (checks for expired deadlines on active complaints and updates status to Escalated to Manager)
+Color-coded SLA countdown timer in complaints table
+SLA Breach Alert banner on dashboard for escalated/expired complaints
+
+
+Messaging
+Threaded message exchange per complaint
+Role-scoped messaging (sending replies/updates directly to complaint participants)
+Unread message count badges in sidebar and dashboard header
+Read status tracking (Unread to Read updates)
+Message attachment support (uploading images in chat)
+
+
+File Uploads
+Multer-based image upload middleware on backend
+Dynamic file renaming and sanitization for uploads
+Static file serving on /uploads endpoint
+File attachment indicators in table view (paperclip icons)
+Chat image preview modals
+
+
+UI / Theming
+Light and Dark mode theme toggle
+Theme preference persistence in database and local storage
+Custom select dropdowns with keyboard navigation support
+Toast alerts for server responses and errors
+Skeleton loader components for loading states
+Collapsible sidebar and responsive mobile navbar
+
+
+
+Dashboard & Sorting
+Server-side sorting by raised date (default) or SLA Priority (Escalated → Red → Amber → Green → Completed)
+Dynamic KPI stat cards (Total Logs, Pending, In Progress, Escalated, Completed)
+Dashboard search bar (filters by ID, Customer Code, or Invoice Number)
+Client-side status tabs and category filters
+Dedicated "My Complaints" dashboard tab view
+
+
+Security
+Helmet HTTP security headers
+CORS middleware with dynamic localhost port allowance
+IP and user-agent rate limiting via express-rate-limit
+Input validation via express-validator
+
+
+Dev / Infra
+Dynamic TCP port scanner to automatically resolve local SQL Server instance ports
+In-memory mock database fallback configuration
+VS Code tasks configuration for running concurrent frontend/backend development instances
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
