@@ -8,7 +8,8 @@ const FilterTabs = ({
   setSortBy, 
   selectedDept, 
   setSelectedDept, 
-  counts
+  counts,
+  categories = []
 }) => {
   return (
     <section 
@@ -118,10 +119,7 @@ const FilterTabs = ({
           style={{ minWidth: '180px' }}
           options={[
             { value: 'All', label: 'All' },
-            { value: 'Mismatch', label: 'Mismatch' },
-            { value: 'Packaging', label: 'Packaging' },
-            { value: 'Quality Issues', label: 'Quality Issues' },
-            { value: 'Transport Related', label: 'Transport Related' }
+            ...categories.map(cat => ({ value: cat.name, label: cat.name }))
           ]}
         />
 

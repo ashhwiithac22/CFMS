@@ -44,6 +44,7 @@ const Dashboard = () => {
   
   // Sorting State
   const [sortBy, setSortBy] = useState('Raised Date');
+  const [categories, setCategories] = useState([]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -84,10 +85,23 @@ const Dashboard = () => {
     }
   };
 
+  const fetchMetadata = async () => {
+    try {
+      const res = await api.get('/complaints/metadata');
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data.data.complaintTypes || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch metadata:', err);
+    }
+  };
+
   // Initial load + polling (refresh every 8s)
   useEffect(() => {
     refreshUnreadCount();
     fetchComplaints(sortBy);
+    fetchMetadata();
     const interval = setInterval(() => {
       refreshUnreadCount();
       fetchComplaints(sortBy);
@@ -316,6 +330,7 @@ const Dashboard = () => {
                   setSelectedDept={setSelectedDept}
                   counts={{ all: totalCount, pending: pendingCount, inprogress: inprogressCount, escalated: escalatedCount, completed: completedCount }}
                   isMobile={isMobile}
+                  categories={categories}
                 />
               </div>
 
@@ -390,6 +405,7 @@ const Dashboard = () => {
               setSelectedDept={setSelectedDept}
               counts={{ all: totalCount, pending: pendingCount, inprogress: inprogressCount, escalated: escalatedCount, completed: completedCount }}
               isMobile={isMobile}
+              categories={categories}
             />
           </div>
 
