@@ -231,6 +231,7 @@ const Dashboard = () => {
   const inprogressCount = complaints.filter(c => c.status === 'In Progress').length;
   const escalatedCount = complaints.filter(c => c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed')).length;
   const completedCount = complaints.filter(c => c.status === 'Completed' || c.status === 'Resolved').length;
+  const breachedCount = complaints.filter(c => c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head').length;
 
   return (
     <div className="min-h-screen flex flex-col select-none" style={{ backgroundColor: 'var(--bg-secondary)', minHeight: '100vh' }}>
@@ -328,8 +329,6 @@ const Dashboard = () => {
                   setSortBy={setSortBy}
                   selectedDept={selectedDept}
                   setSelectedDept={setSelectedDept}
-                  counts={{ all: totalCount, pending: pendingCount, inprogress: inprogressCount, escalated: escalatedCount, completed: completedCount }}
-                  isMobile={isMobile}
                   categories={categories}
                 />
               </div>
@@ -392,7 +391,7 @@ const Dashboard = () => {
           </section>
 
           <div className="stagger-banner">
-            <SlaAlertBanner breachCount={3} />
+            <SlaAlertBanner breachCount={breachedCount} onViewEscalatedClick={() => setSelectedStatus('Escalated')} />
           </div>
 
           <div className="animate-slide-up stagger-filter" style={{ position: 'relative', zIndex: 100 }}>
@@ -403,8 +402,6 @@ const Dashboard = () => {
               setSortBy={setSortBy}
               selectedDept={selectedDept}
               setSelectedDept={setSelectedDept}
-              counts={{ all: totalCount, pending: pendingCount, inprogress: inprogressCount, escalated: escalatedCount, completed: completedCount }}
-              isMobile={isMobile}
               categories={categories}
             />
           </div>

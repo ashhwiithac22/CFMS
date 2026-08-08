@@ -125,14 +125,14 @@ class ComplaintRepository {
     // Build ORDER BY clause based on sortBy parameter
     let orderByClause;
     if (sortBy === 'priority') {
-      // Server-side priority ranking: Escalated → Red(<5h) → Amber(5-12h) → Green(>12h) → Completed last
+      // Server-side priority ranking: Escalated → Red(<6h) → Amber(6-12h) → Green(>12h) → Completed last
       orderByClause = `
         ORDER BY
           CASE
             WHEN c.status LIKE '%Escalated%'                                                        THEN 1
-            WHEN DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) < 5
+            WHEN DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) < 6
                  AND c.status NOT IN ('Resolved', 'Completed')                                      THEN 2
-            WHEN DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) BETWEEN 5 AND 12
+            WHEN DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) BETWEEN 6 AND 12
                  AND c.status NOT IN ('Resolved', 'Completed')                                      THEN 3
             WHEN c.status IN ('Resolved', 'Completed')                                              THEN 5
             ELSE                                                                                         4
@@ -181,7 +181,7 @@ class ComplaintRepository {
       let priorityLabel;
       if (row.status && row.status.includes('Escalated')) {
         priorityLabel = 'Critical';
-      } else if (!isResolved && row.hours_left < 5) {
+      } else if (!isResolved && row.hours_left < 6) {
         priorityLabel = 'High';
       } else if (!isResolved && row.hours_left <= 12) {
         priorityLabel = 'Medium';

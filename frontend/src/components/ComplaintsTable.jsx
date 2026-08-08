@@ -66,8 +66,27 @@ const ComplaintsTable = ({
     }
     if (isNaN(hours)) return '#10B981';
     if (hours > 12) return '#10B981'; // Green above 12h
-    if (hours >= 5) return '#F59E0B'; // Amber 12h down to 5h
-    return '#EF4444'; // Red below 5h
+    if (hours >= 6) return '#F59E0B'; // Amber 12h down to 6h
+    return '#EF4444'; // Red below 6h
+  };
+
+  const renderStatusBadge = (comp) => {
+    const status = comp.status;
+    if (status === 'New' || status === 'Assigned') {
+      const hours = comp.hours_left !== undefined ? comp.hours_left : parseInt(comp.sla, 10);
+      let badgeColor = 'green';
+      if (comp.sla?.includes('Expired') || comp.sla?.includes('!') || (hours !== undefined && hours <= 0)) {
+        badgeColor = 'red';
+      } else if (hours !== undefined && !isNaN(hours)) {
+        if (hours <= 6) {
+          badgeColor = 'red';
+        } else if (hours <= 12) {
+          badgeColor = 'amber';
+        }
+      }
+      return <Badge color={badgeColor} dot>{comp.sla || '24h'}</Badge>;
+    }
+    return <Badge color={getBadgeColorForStatus(status)} dot>{status}</Badge>;
   };
 
   // Stagger container animation for table rows
@@ -132,7 +151,7 @@ const ComplaintsTable = ({
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 'bold', color: 'var(--brand-primary)', fontSize: '14px' }}>{comp.id}</span>
-                  <Badge color={getBadgeColorForStatus(comp.status)} dot>{comp.status}</Badge>
+                  {renderStatusBadge(comp)}
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 'bold' }}>{comp.customer} • {comp.invoice}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
@@ -267,7 +286,7 @@ const ComplaintsTable = ({
                     </td>
 
                     <td style={{ padding: '12px 10px', width: '105px', minWidth: '105px', boxSizing: 'border-box', textAlign: 'left' }}>
-                      <Badge color={getBadgeColorForStatus(comp.status)} dot>{comp.status}</Badge>
+                      {renderStatusBadge(comp)}
                     </td>
 
                     {isSalesExec && (

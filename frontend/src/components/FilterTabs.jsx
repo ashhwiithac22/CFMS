@@ -8,7 +8,6 @@ const FilterTabs = ({
   setSortBy, 
   selectedDept, 
   setSelectedDept, 
-  counts,
   categories = []
 }) => {
   return (
@@ -16,7 +15,7 @@ const FilterTabs = ({
       style={{ 
         marginTop: '16px', 
         display: 'flex', 
-        justifyContent: 'space-between', 
+        justifyContent: 'flex-end', 
         alignItems: 'center',
         flexWrap: 'wrap', 
         gap: '16px',
@@ -27,73 +26,14 @@ const FilterTabs = ({
         zIndex: 30
       }}
     >
-      {/* Left side: pill tab buttons */}
-      <div 
-        style={{ 
-          display: 'flex', 
-          flexWrap: 'wrap', 
-          gap: '8px',
-          alignItems: 'center'
-        }}
-      >
-        {[
-          { status: 'All', label: 'All', count: counts.all },
-          { status: 'Pending', label: 'Pending', count: counts.pending },
-          { status: 'In Progress', label: 'In Progress', count: counts.inprogress },
-          { status: 'Escalated', label: 'Escalated', count: counts.escalated },
-          { status: 'Completed', label: 'Completed', count: counts.completed }
-        ].map(tab => {
-          const isActive = selectedStatus === tab.status;
-          return (
-            <button
-              key={tab.status}
-              onClick={() => setSelectedStatus(tab.status)}
-              className="pill-hover"
-              style={{
-                padding: '8px 16px',
-                borderRadius: '20px',
-                fontSize: '14px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                transition: 'all 180ms ease',
-                boxSizing: 'border-box',
-                border: isActive ? 'none' : '1px solid var(--border-color)',
-                backgroundColor: isActive ? 'var(--brand-primary)' : 'var(--bg-primary)',
-                color: isActive ? '#FFFFFF' : 'var(--text-primary)',
-                height: '36px',
-                boxShadow: isActive ? '0 2px 8px rgba(30, 79, 217, 0.25)' : 'none'
-              }}
-              type="button"
-            >
-              <span>{tab.label}</span>
-              <span 
-                style={{
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  backgroundColor: isActive ? 'var(--bg-primary)' : 'var(--bg-secondary)',
-                  color: isActive ? 'var(--brand-primary)' : 'var(--text-secondary)',
-                  lineHeight: 1
-                }}
-              >
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Right side: three custom dropdown selects */}
+      {/* Custom dropdown selects */}
       <div 
         style={{ 
           display: 'flex', 
           flexWrap: 'wrap', 
           alignItems: 'center', 
-          gap: '12px' 
+          gap: '12px',
+          justifyContent: 'flex-end'
         }}
       >
         {/* Dropdown 1: Sort by */}
