@@ -72,6 +72,9 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Silently ignore favicon.ico requests (browser auto-requests it)
+app.use('/favicon.ico', (req, res) => res.status(204).end());
+
 // Catch-all route for unmatched paths (404)
 app.use('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server`, 404));
@@ -82,11 +85,14 @@ app.use((err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
-  console.error('SERVER_ERROR:', {
-    message: err.message,
-    stack: err.stack,
-    errors: err.errors
-  });
+  // Only log real server errors (5xx), not expected 404s
+  if (err.statusCode >= 500) {
+    console.error('SERVER_ERROR:', {
+      message: err.message,
+      stack: err.stack,
+      errors: err.errors
+    });
+  }
 
   res.status(err.statusCode).json({
     success: false,

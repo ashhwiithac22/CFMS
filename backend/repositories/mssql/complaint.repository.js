@@ -76,7 +76,7 @@ class ComplaintRepository {
     };
   }
 
-  async findAll(userRole, userId, warehouseId) {
+  async findAll(userRole, userId, warehouseId, sortBy = 'date') {
     const pool = getPool();
 
     // 1. Automatic Escalation Check for expired SLAs past 24 hours
@@ -122,6 +122,28 @@ class ComplaintRepository {
       whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated') AND c.status <> 'Closed'`;
     }
 
+    // Build ORDER BY clause based on sortBy parameter
+    let orderByClause;
+    if (sortBy === 'priority') {
+      // Server-side priority ranking: Escalated → Red(<5h) → Amber(5-12h) → Green(>12h) → Completed last
+      orderByClause = `
+        ORDER BY
+          CASE
+            WHEN c.status LIKE '%Escalated%'                                                        THEN 1
+            WHEN DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) < 5
+                 AND c.status NOT IN ('Resolved', 'Completed')                                      THEN 2
+            WHEN DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) BETWEEN 5 AND 12
+                 AND c.status NOT IN ('Resolved', 'Completed')                                      THEN 3
+            WHEN c.status IN ('Resolved', 'Completed')                                              THEN 5
+            ELSE                                                                                         4
+          END ASC,
+          c.raised_at DESC
+      `;
+    } else {
+      // Default: newest raised complaints first
+      orderByClause = 'ORDER BY c.raised_at DESC';
+    }
+
     const query = `
       SELECT 
         c.id,
@@ -132,6 +154,7 @@ class ComplaintRepository {
         cs.name AS subtype,
         (u_sales.first_name + ' ' + u_sales.last_name) AS raisedBy,
         CONVERT(VARCHAR(20), c.raised_at, 106) AS date,
+        CONVERT(VARCHAR(30), c.raised_at, 126) AS raised_at_iso,
         c.status,
         w.name AS warehouse_name,
         c.attachment_url,
@@ -143,7 +166,7 @@ class ComplaintRepository {
       JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
       LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
       ${whereClause}
-      ORDER BY c.raised_at DESC
+      ${orderByClause}
     `;
 
     const result = await pool.request().query(query);
@@ -154,6 +177,20 @@ class ComplaintRepository {
         slaText = row.hours_left > 0 ? `${row.hours_left}h` : 'Expired !';
       }
 
+      // Compute priority rank for display (mirrors the SQL CASE for client reference)
+      let priorityLabel;
+      if (row.status && row.status.includes('Escalated')) {
+        priorityLabel = 'Critical';
+      } else if (!isResolved && row.hours_left < 5) {
+        priorityLabel = 'High';
+      } else if (!isResolved && row.hours_left <= 12) {
+        priorityLabel = 'Medium';
+      } else if (isResolved) {
+        priorityLabel = 'Completed';
+      } else {
+        priorityLabel = 'Low';
+      }
+
       return {
         id: row.id_display,
         customer: row.customer,
@@ -162,11 +199,13 @@ class ComplaintRepository {
         subtype: row.subtype || 'General',
         raisedBy: row.raisedBy,
         date: row.date,
+        raised_at: row.raised_at_iso,   // Raw ISO timestamp for spot-checking
         sla: slaText,
         hours_left: isResolved ? 999 : row.hours_left,
         status: row.status,
-        priority: row.hours_left < 6 ? 'High' : 'Medium',
-        department: row.warehouse_name,
+        priority: priorityLabel,
+        department: row.warehouse_name, // Warehouse name — used in table column
+        warehouse_name: row.warehouse_name,
         attach: Boolean(row.attach),
         attachment_url: row.attachment_url
       };

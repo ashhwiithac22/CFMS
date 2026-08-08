@@ -47,7 +47,8 @@ router.get('/stats', authMiddleware, async (req, res, next) => {
 });
 
 // GET /api/complaints
-// Returns complaint list scoped strictly to user role and assigned warehouse
+// Returns complaint list scoped strictly to user role and assigned warehouse.
+// Accepts optional ?sort=date (default, raised_at DESC) or ?sort=priority (CASE-based ranking)
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const userRole = req.user.role;
@@ -64,7 +65,10 @@ router.get('/', authMiddleware, async (req, res, next) => {
       }
     }
 
-    const complaints = await complaintRepo.findAll(userRole, userId, warehouseId);
+    // Accept ?sort=priority or ?sort=date (default)
+    const sortBy = req.query.sort === 'priority' ? 'priority' : 'date';
+
+    const complaints = await complaintRepo.findAll(userRole, userId, warehouseId, sortBy);
     res.status(200).json({
       success: true,
       data: { complaints }

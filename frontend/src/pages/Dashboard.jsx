@@ -70,9 +70,11 @@ const Dashboard = () => {
     }
   };
 
-  const fetchComplaints = async () => {
+  const fetchComplaints = async (sort = sortBy) => {
     try {
-      const res = await api.get('/complaints');
+      // Map frontend label to backend param value
+      const sortParam = sort === 'Priority' ? 'priority' : 'date';
+      const res = await api.get(`/complaints?sort=${sortParam}`);
       if (res.ok) {
         const data = await res.json();
         setComplaints(data.data.complaints || []);
@@ -82,15 +84,22 @@ const Dashboard = () => {
     }
   };
 
+  // Initial load + polling (refresh every 8s)
   useEffect(() => {
     refreshUnreadCount();
-    fetchComplaints();
+    fetchComplaints(sortBy);
     const interval = setInterval(() => {
       refreshUnreadCount();
-      fetchComplaints();
+      fetchComplaints(sortBy);
     }, 8000);
     return () => clearInterval(interval);
   }, []);
+
+  // Re-fetch from backend whenever sortBy changes (backend enforces ORDER BY)
+  useEffect(() => {
+    fetchComplaints(sortBy);
+    setCurrentPage(1); // Reset to page 1 on sort change
+  }, [sortBy]);
 
   // Initialize clean empty complaints state
   const [complaints, setComplaints] = useState([]);
@@ -198,18 +207,9 @@ const Dashboard = () => {
     return true;
   });
 
-  // Sort complaints based on selection
-  const sortedComplaints = [...filteredComplaints].sort((a, b) => {
-    if (sortBy === 'ID') {
-      return a.id.localeCompare(b.id);
-    }
-    if (sortBy === 'Priority') {
-      const priorityWeight = { High: 3, Medium: 2, Low: 1 };
-      return (priorityWeight[b.priority] || 0) - (priorityWeight[a.priority] || 0);
-    }
-    // Default Raised Date Sort (using ID string comparison since they increment sequentially)
-    return b.id.localeCompare(a.id);
-  });
+  // Sort is enforced by backend ORDER BY — no client-side re-sort needed.
+  // The complaints array is already in the correct order from the API.
+  const sortedComplaints = filteredComplaints;
 
   // KPI count statistics calculated dynamically from current scoped complaint records
   const totalCount = complaints.length;
@@ -268,6 +268,89 @@ const Dashboard = () => {
             boxSizing: 'border-box'
           }}
         >
+          {/* ─────────────────────────────── MY COMPLAINTS VIEW ─────────────────────────────── */}
+          {activeTab === 'My Complaints' ? (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h1 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+                    My Complaints
+                  </h1>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                    {user?.role === 'Sales Executive' && 'All complaints raised by you — filtered to your account only.'}
+                    {user?.role === 'Warehouse Team' && 'Shared complaint queue for your warehouse — all team members see the same list.'}
+                    {user?.role === 'Warehouse Manager' && 'Escalated complaints for your warehouse that require your attention.'}
+                    {user?.role === 'Administrator' && 'Global view — all complaints across every warehouse.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('Dashboard')}
+                  style={{
+                    padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
+                    border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-secondary)', cursor: 'pointer'
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+              </div>
+
+              {/* Stat cards — same as dashboard */}
+              <section style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(5, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(1, 1fr)', gap: '16px', width: '100%', boxSizing: 'border-box' }}>
+                <StatCard title="Total Logs" value={totalCount} icon={<FileSpreadsheet size={16} />} color="slate" status="All" activeStatus={selectedStatus} onClick={() => setSelectedStatus('All')} />
+                <StatCard title="Pending" value={pendingCount} icon={<Clock size={16} />} color="amber" status="Pending" activeStatus={selectedStatus} onClick={() => setSelectedStatus('Pending')} />
+                <StatCard title="In Progress" value={inprogressCount} icon={<RefreshCw size={16} />} color="blue" status="In Progress" activeStatus={selectedStatus} onClick={() => setSelectedStatus('In Progress')} />
+                <StatCard title="Escalated" value={escalatedCount} icon={<ShieldAlert size={16} />} color="red" status="Escalated" activeStatus={selectedStatus} onClick={() => setSelectedStatus('Escalated')} />
+                <StatCard title="Completed" value={completedCount} icon={<CheckSquare size={16} />} color="green" status="Completed" activeStatus={selectedStatus} onClick={() => setSelectedStatus('Completed')} />
+              </section>
+
+              {/* Filter + Sort toolbar */}
+              <div style={{ position: 'relative', zIndex: 100 }}>
+                <FilterTabs 
+                  selectedStatus={selectedStatus}
+                  setSelectedStatus={setSelectedStatus}
+                  sortBy={sortBy}
+                  setSortBy={setSortBy}
+                  selectedDept={selectedDept}
+                  setSelectedDept={setSelectedDept}
+                  counts={{ all: totalCount, pending: pendingCount, inprogress: inprogressCount, escalated: escalatedCount, completed: completedCount }}
+                  isMobile={isMobile}
+                />
+              </div>
+
+              {/* Complaints table */}
+              <div style={{ position: 'relative', zIndex: 10 }}>
+                <ComplaintsTable 
+                  complaints={sortedComplaints}
+                  currentPage={currentPage}
+                  setCurrentPage={setCurrentPage}
+                  onMessageClick={handleMessageClick}
+                  onStatusChange={handleStatusChange}
+                  isMobile={isMobile}
+                  selectedQuickComplaint={selectedQuickComplaint}
+                  onRowSelect={setSelectedQuickComplaint}
+                />
+              </div>
+
+              <MessagePanel 
+                replyToComplaint={replyToComplaint}
+                messageText={messageText}
+                setMessageText={setMessageText}
+                attachmentFile={attachmentFile}
+                setAttachmentFile={setAttachmentFile}
+                setSelectedRecipient={setSelectedRecipient}
+                onSubmit={handleSendMessageSubmit}
+                onClose={() => { setMessagePanelOpen(false); setReplyToComplaint(null); setSelectedQuickComplaint(null); setAttachmentFile(null); setMessages([]); }}
+                messages={messages}
+                setMessages={setMessages}
+                onFetchThread={fetchThreadForRecipient}
+                currentUserId={user?.id || user?.userId}
+              />
+            </div>
+          ) : (
+          /* ─────────────────────────────── DASHBOARD VIEW ─────────────────────────────── */
+          <>
           <div className="animate-fade-in">
             <DashboardHeader 
               searchQuery={searchQuery}
@@ -337,6 +420,8 @@ const Dashboard = () => {
             onFetchThread={fetchThreadForRecipient}
             currentUserId={user?.id || user?.userId}
           />
+          </>
+          )}
         </main>
       </div>
     </div>
