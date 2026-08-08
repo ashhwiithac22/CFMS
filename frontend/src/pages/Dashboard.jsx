@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
-  FileSpreadsheet, Clock, RefreshCw, ShieldAlert, CheckSquare 
+  FileSpreadsheet, Clock, RefreshCw, ShieldAlert, CheckSquare, BarChart3
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
@@ -200,8 +200,13 @@ const Dashboard = () => {
     }
   };
 
+  // Derived state to filter complaints for "My Complaints" tab for Warehouse Team members
+  const displayComplaints = (user?.role === 'Warehouse Team' && activeTab === 'My Complaints')
+    ? complaints.filter(c => c.taken_action_by === user.id)
+    : complaints;
+
   // Filter complaints based on selection
-  const filteredComplaints = complaints.filter(c => {
+  const filteredComplaints = displayComplaints.filter(c => {
     if (selectedStatus === 'Pending' && !(c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New')) return false;
     if (selectedStatus === 'In Progress' && c.status !== 'In Progress') return false;
     if (selectedStatus === 'Escalated' && !(c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed'))) return false;
@@ -226,12 +231,12 @@ const Dashboard = () => {
   const sortedComplaints = filteredComplaints;
 
   // KPI count statistics calculated dynamically from current scoped complaint records
-  const totalCount = complaints.length;
-  const pendingCount = complaints.filter(c => c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New').length;
-  const inprogressCount = complaints.filter(c => c.status === 'In Progress').length;
-  const escalatedCount = complaints.filter(c => c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed')).length;
-  const completedCount = complaints.filter(c => c.status === 'Completed' || c.status === 'Resolved').length;
-  const breachedCount = complaints.filter(c => c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head').length;
+  const totalCount = displayComplaints.length;
+  const pendingCount = displayComplaints.filter(c => c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New').length;
+  const inprogressCount = displayComplaints.filter(c => c.status === 'In Progress').length;
+  const escalatedCount = displayComplaints.filter(c => c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed')).length;
+  const completedCount = displayComplaints.filter(c => c.status === 'Completed' || c.status === 'Resolved').length;
+  const breachedCount = displayComplaints.filter(c => c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head').length;
 
   return (
     <div className="min-h-screen flex flex-col select-none" style={{ backgroundColor: 'var(--bg-secondary)', minHeight: '100vh' }}>
@@ -344,6 +349,7 @@ const Dashboard = () => {
                   isMobile={isMobile}
                   selectedQuickComplaint={selectedQuickComplaint}
                   onRowSelect={setSelectedQuickComplaint}
+                  activeTab={activeTab}
                 />
               </div>
 
@@ -364,6 +370,35 @@ const Dashboard = () => {
             </div>
           ) : (
           /* ─────────────────────────────── DASHBOARD VIEW ─────────────────────────────── */
+          user?.role === 'Administrator' ? (
+            <div 
+              className="animate-fade-in"
+              style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                minHeight: '400px',
+                backgroundColor: 'var(--bg-primary)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color)',
+                padding: '48px',
+                textAlign: 'center',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                margin: '24px 0',
+                width: '100%',
+                boxSizing: 'border-box'
+              }}
+            >
+              <BarChart3 size={48} style={{ color: 'var(--brand-primary)', marginBottom: '16px', opacity: 0.8 }} />
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px 0' }}>
+                Admin Control Center
+              </h2>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '400px', margin: 0 }}>
+                Reports and complaint oversight tools coming soon.
+              </p>
+            </div>
+          ) : (
           <>
           <div className="animate-fade-in">
             <DashboardHeader 
@@ -416,6 +451,7 @@ const Dashboard = () => {
               isMobile={isMobile}
               selectedQuickComplaint={selectedQuickComplaint}
               onRowSelect={setSelectedQuickComplaint}
+              activeTab={activeTab}
             />
           </div>
 
@@ -434,6 +470,7 @@ const Dashboard = () => {
             currentUserId={user?.id || user?.userId}
           />
           </>
+          )
           )}
         </main>
       </div>

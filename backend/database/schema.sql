@@ -71,6 +71,7 @@ BEGIN
         attachment_url VARCHAR(500) NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'New', -- 'New', 'Assigned', 'In Progress', 'Escalated to Manager', 'Escalated to Warehouse Head', 'Resolved', 'Closed'
         assigned_warehouse_team_id INT FOREIGN KEY REFERENCES Users(id) NULL,
+        taken_action_by INT FOREIGN KEY REFERENCES Users(id) NULL,
         raised_at DATETIME DEFAULT GETDATE(),
         warehouse_team_deadline DATETIME NULL,
         warehouse_team_responded_at DATETIME NULL,
@@ -125,4 +126,15 @@ BEGIN
         details VARCHAR(500) NULL,
         timestamp DATETIME DEFAULT GETDATE()
     );
+END;
+
+-- Migration to add taken_action_by to Complaints table if it doesn't exist
+IF NOT EXISTS (
+    SELECT * FROM sys.columns 
+    WHERE object_id = OBJECT_ID(N'[dbo].[Complaints]') 
+      AND name = N'taken_action_by'
+)
+BEGIN
+    ALTER TABLE Complaints 
+    ADD taken_action_by INT FOREIGN KEY REFERENCES Users(id) NULL;
 END;

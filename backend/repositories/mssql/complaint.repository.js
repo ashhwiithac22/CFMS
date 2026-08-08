@@ -159,7 +159,8 @@ class ComplaintRepository {
         w.name AS warehouse_name,
         c.attachment_url,
         (CASE WHEN c.attachment_url IS NOT NULL THEN 1 ELSE 0 END) AS attach,
-        DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) AS hours_left
+        DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) AS hours_left,
+        c.taken_action_by
       FROM Complaints c
       JOIN Users u_sales ON c.sales_executive_id = u_sales.id
       JOIN Warehouses w ON c.warehouse_id = w.id
@@ -207,7 +208,8 @@ class ComplaintRepository {
         department: row.warehouse_name, // Warehouse name — used in table column
         warehouse_name: row.warehouse_name,
         attach: Boolean(row.attach),
-        attachment_url: row.attachment_url
+        attachment_url: row.attachment_url,
+        taken_action_by: row.taken_action_by
       };
     });
   }
@@ -254,10 +256,12 @@ class ComplaintRepository {
     await pool.request()
       .input('id', sql.Int, comp.id)
       .input('new_status', sql.VarChar, newStatus)
+      .input('user_id', sql.Int, parseInt(userId, 10))
       .query(`
         UPDATE Complaints 
         SET status = @new_status,
             updated_at = GETDATE(),
+            taken_action_by = (CASE WHEN @new_status = 'In Progress' THEN @user_id ELSE taken_action_by END),
             warehouse_team_responded_at = (CASE WHEN @new_status = 'In Progress' THEN ISNULL(warehouse_team_responded_at, GETDATE()) ELSE warehouse_team_responded_at END),
             escalated_to_manager_at = (CASE WHEN @new_status LIKE '%Escalated%' THEN ISNULL(escalated_to_manager_at, GETDATE()) ELSE escalated_to_manager_at END)
         WHERE id = @id

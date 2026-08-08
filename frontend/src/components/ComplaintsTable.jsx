@@ -15,13 +15,122 @@ const ComplaintsTable = ({
   isMobile,
   selectedQuickComplaint,
   onRowSelect,
-  loading = false
+  loading = false,
+  activeTab = 'Dashboard'
 }) => {
   const { user } = useAuth();
   const isSalesExec = user?.role === 'Sales Executive';
   const pageSize = 5;
   const totalPages = Math.ceil(complaints.length / pageSize) || 1;
   const pageComplaints = complaints.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const renderActions = (comp) => {
+    const isCompleted = comp.status === 'Completed' || comp.status === 'Resolved';
+    const messageBtn = (
+      <Button 
+        key="message"
+        size="sm"
+        variant="message"
+        onClick={() => onMessageClick(comp)}
+      >
+        Message
+      </Button>
+    );
+
+    if (isSalesExec) {
+      return messageBtn;
+    }
+
+    if (isCompleted) {
+      return messageBtn;
+    }
+
+    if (user?.role === 'Warehouse Team') {
+      if (activeTab === 'My Complaints') {
+        return (
+          <>
+            <Button 
+              key="complete"
+              size="sm"
+              variant="complete"
+              onClick={() => onStatusChange(comp.id, 'Complete')}
+            >
+              Complete
+            </Button>
+            {messageBtn}
+          </>
+        );
+      } else {
+        if (comp.status === 'In Progress') {
+          return (
+            <>
+              <Button 
+                key="takeAction"
+                size="sm"
+                variant="takeAction"
+                onClick={() => onStatusChange(comp.id, 'In Progress')}
+              >
+                Take Action
+              </Button>
+              <Button 
+                key="escalate"
+                size="sm"
+                variant="escalate"
+                onClick={() => onStatusChange(comp.id, 'Escalate')}
+              >
+                Escalate
+              </Button>
+              {messageBtn}
+            </>
+          );
+        } else {
+          return (
+            <>
+              <Button 
+                key="takeAction"
+                size="sm"
+                variant="takeAction"
+                onClick={() => onStatusChange(comp.id, 'In Progress')}
+              >
+                Take Action
+              </Button>
+              {messageBtn}
+            </>
+          );
+        }
+      }
+    }
+
+    return (
+      <>
+        <Button 
+          key="takeAction"
+          size="sm"
+          variant="takeAction"
+          onClick={() => onStatusChange(comp.id, 'In Progress')}
+        >
+          Take Action
+        </Button>
+        <Button 
+          key="complete"
+          size="sm"
+          variant="complete"
+          onClick={() => onStatusChange(comp.id, 'Complete')}
+        >
+          Complete
+        </Button>
+        <Button 
+          key="escalate"
+          size="sm"
+          variant="escalate"
+          onClick={() => onStatusChange(comp.id, 'Escalate')}
+        >
+          Escalate
+        </Button>
+        {messageBtn}
+      </>
+    );
+  };
 
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const shouldReduceMotion = useReducedMotion();
@@ -162,14 +271,7 @@ const ComplaintsTable = ({
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  {!isSalesExec && (
-                    <>
-                      <Button size="sm" variant="takeAction" onClick={() => onStatusChange(comp.id, 'In Progress')}>Take Action</Button>
-                      <Button size="sm" variant="complete" onClick={() => onStatusChange(comp.id, 'Complete')}>Complete</Button>
-                      <Button size="sm" variant="escalate" onClick={() => onStatusChange(comp.id, 'Escalate')}>Escalate</Button>
-                    </>
-                  )}
-                  <Button size="sm" variant="message" onClick={() => onMessageClick(comp)}>Message</Button>
+                  {renderActions(comp)}
                 </div>
               </motion.div>
             );
@@ -307,38 +409,7 @@ const ComplaintsTable = ({
 
                     <td style={{ padding: '12px 10px', width: isSalesExec ? '100px' : '220px', minWidth: isSalesExec ? '100px' : '220px', boxSizing: 'border-box', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                        {!isSalesExec && (
-                          <>
-                            <Button 
-                              size="sm"
-                              variant="takeAction"
-                              onClick={() => onStatusChange(comp.id, 'In Progress')}
-                            >
-                              Take Action
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="complete"
-                              onClick={() => onStatusChange(comp.id, 'Completed')}
-                            >
-                              Complete
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="escalate"
-                              onClick={() => onStatusChange(comp.id, 'Escalate')}
-                            >
-                              Escalate
-                            </Button>
-                          </>
-                        )}
-                        <Button 
-                          size="sm"
-                          variant="message"
-                          onClick={() => onMessageClick(comp)}
-                        >
-                          Message
-                        </Button>
+                        {renderActions(comp)}
                       </div>
                     </td>
                   </motion.tr>
