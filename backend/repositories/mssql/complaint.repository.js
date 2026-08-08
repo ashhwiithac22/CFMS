@@ -123,10 +123,9 @@ class ComplaintRepository {
       whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND c.status <> 'Closed'`;
     } else if (userRole === 'Warehouse Manager') {
       if (history) {
-        whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated' OR c.escalated_to_manager_at IS NOT NULL) AND c.status <> 'Closed'`;
+        whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND c.escalated_to_manager_at IS NOT NULL AND c.status <> 'Closed'`;
       } else {
-        // Warehouse Managers MUST ONLY see complaints for their warehouse that have reached Escalated status!
-        whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated') AND c.status <> 'Closed'`;
+        whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND c.escalated_to_manager_at IS NOT NULL AND c.status NOT IN ('Resolved', 'Completed', 'Closed')`;
       }
     }
 
@@ -308,14 +307,35 @@ class ComplaintRepository {
     // Trigger auto-escalations first so stats match real-time DB state
     await this.findAll(userRole, userId, warehouseId);
 
+    if (userRole === 'Warehouse Manager') {
+      const query = `
+        SELECT 
+          COALESCE(SUM(CASE WHEN c.warehouse_id = @warehouse_id THEN 1 ELSE 0 END), 0) AS totalCount,
+          COALESCE(SUM(CASE WHEN c.warehouse_id = @warehouse_id AND c.escalated_to_manager_at IS NOT NULL AND c.status IN ('Escalated to Manager', 'Escalated to Warehouse Head') THEN 1 ELSE 0 END), 0) AS pendingCount,
+          COALESCE(SUM(CASE WHEN c.warehouse_id = @warehouse_id AND c.escalated_to_manager_at IS NOT NULL AND c.status = 'In Progress' THEN 1 ELSE 0 END), 0) AS inprogressCount,
+          COALESCE(SUM(CASE WHEN c.warehouse_id = @warehouse_id AND c.escalated_to_manager_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS escalatedCount,
+          COALESCE(SUM(CASE WHEN c.warehouse_id = @warehouse_id AND c.status IN ('Completed', 'Resolved') THEN 1 ELSE 0 END), 0) AS completedCount
+        FROM Complaints c
+      `;
+      const res = await pool.request()
+        .input('warehouse_id', sql.Int, warehouseId)
+        .query(query);
+      const row = res.recordset[0] || {};
+      return {
+        totalCount: row.totalCount || 0,
+        pendingCount: row.pendingCount || 0,
+        inprogressCount: row.inprogressCount || 0,
+        escalatedCount: row.escalatedCount || 0,
+        completedCount: row.completedCount || 0
+      };
+    }
+
     let whereClause = 'WHERE 1=1';
 
     if (userRole === 'Sales Executive') {
       whereClause += ` AND c.sales_executive_id = ${parseInt(userId, 10)} AND c.status <> 'Closed'`;
     } else if (userRole === 'Warehouse Team') {
       whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND c.status <> 'Closed'`;
-    } else if (userRole === 'Warehouse Manager') {
-      whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated') AND c.status <> 'Closed'`;
     }
 
     const query = `

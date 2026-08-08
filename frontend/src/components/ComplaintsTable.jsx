@@ -96,8 +96,19 @@ const ComplaintsTable = ({
     }
 
     if (user?.role === 'Warehouse Manager') {
+      const showTakeAction = comp.status !== 'In Progress';
       return (
         <>
+          {showTakeAction && (
+            <Button 
+              key="takeAction"
+              size="sm"
+              variant="takeAction"
+              onClick={() => onStatusChange(comp.id, 'In Progress')}
+            >
+              Take Action
+            </Button>
+          )}
           <Button 
             key="complete"
             size="sm"

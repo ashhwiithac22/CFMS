@@ -118,10 +118,16 @@ Below is the SQL Server schema defining the tables and relations:
 
 ### 3. Warehouse Manager
 - **Scope**:
-  - **Dashboard**: Shows active escalated complaints only (status is escalated and not completed).
+  - **Dashboard**: Shows active escalated complaints only (status is escalated/in progress and not completed).
   - **Escalated Complaints Tab**: Shows full history of escalated complaints for their warehouse (active and completed/resolved).
 - **My Complaints Tab**: Removed from sidebar.
-- **Actions**: Exactly TWO actions: **Message** (to the Sales Executive) and **Complete** (resolves/completes the complaint). Take Action and Escalate buttons are removed.
+- **Actions**: Exactly THREE actions: **Message** (to the Sales Executive), **Complete** (resolves/completes the complaint), and **Take Action** (available on unclaimed escalated complaints, moves the status to 'In Progress' and claims the complaint).
+- **Stat Cards** (scoped to their warehouse only):
+  - **Total Logs**: Total count of all complaints ever raised for the manager's warehouse (regardless of status or escalation).
+  - **Pending**: Complaints escalated to the manager but not yet claimed by them (status: Escalated, no manager claim).
+  - **In Progress**: Complaints escalated to the manager that they have clicked "Take Action" on, but not yet marked Complete.
+  - **Escalated**: Total count of complaints ever escalated to this manager (Pending + In Progress + Completed-that-were-escalated).
+  - **Completed**: Total count of complaints completed for this warehouse by anyone (Warehouse Team completions + Manager completions).
 
 ### 4. Administrator
 - **Scope**: Dashboard does not show complaints.
@@ -141,7 +147,8 @@ Below is the SQL Server schema defining the tables and relations:
   - `0 hours left (SLA Breached)`: Triggers auto-escalation to the Warehouse Manager.
 
 ### 2. Take Action Behavior
-- Exclusive; once claimed (status becomes `'In Progress'`), the `"Take Action"` button disappears from the Dashboard for everyone. The claiming user becomes the sole owner (`taken_action_by` is set). The Dashboard view for all team members shows only `"Escalate"` and `"Message"` for that complaint. Sequential reassignment is disabled.
+- **Warehouse Team**: Exclusive claim button. Once claimed (status becomes `'In Progress'`), the `"Take Action"` button disappears from the Dashboard for all team members. The claiming user becomes the sole owner (`taken_action_by` is set). Sequential reassignment is disabled.
+- **Warehouse Manager**: Scoped claim button on escalated complaints. Available on complaints that are escalated but not yet claimed by the manager. Clicking `"Take Action"` updates `taken_action_by` to the Manager's user ID and changes the status to `'In Progress'`, updating the stats from "Pending" to "In Progress" while keeping the complaint active on the Manager's Dashboard.
 
 ### 3. Completed Status
 - Shared final state ('Resolved'/'Completed'). Visible to all team members in the warehouse, the Sales Executive, and the owner. Row styling is rendered with a distinct premium green background.
@@ -182,3 +189,6 @@ Below is the SQL Server schema defining the tables and relations:
   - Removed "Take Action" from Warehouse Manager entirely, leaving only "Complete" and "Message".
   - Scoped Warehouse Manager's Dashboard to active escalated complaints and added a new "Escalated Complaints" sidebar history tab showing both active and completed escalated complaints.
   - Fixed status badge text overlap ("Escalated to Manager") by increasing the Status column width to 145px in `ComplaintsTable.jsx`.
+  - Re-introduced "Take Action" button specifically for the Warehouse Manager role to claim escalated complaints, updating status to `'In Progress'` and moving them in the stat cards.
+  - Fixed Warehouse Manager's stat cards (Total Logs, Pending, In Progress, Escalated, Completed) to correctly pull from the full historical database scope using robust SQL queries.
+  - Verified live E2E counts increments/decrements in browser and cross-checked counts with direct SQL queries.

@@ -101,17 +101,31 @@ const Dashboard = () => {
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      const res = await api.get('/complaints/stats');
+      if (res.ok) {
+        const result = await res.json();
+        setStats(result.data.stats || null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  };
+
   // Initial load + polling (refresh every 8s)
   // Load and poll complaints + metadata on mount, tab change, or sort change
   useEffect(() => {
     refreshUnreadCount();
     fetchComplaints(sortBy);
+    fetchStats();
     fetchMetadata();
     setCurrentPage(1); // Reset to page 1 on tab/sort change
     
     const interval = setInterval(() => {
       refreshUnreadCount();
       fetchComplaints(sortBy);
+      fetchStats();
     }, 8000);
     
     return () => clearInterval(interval);
@@ -119,6 +133,7 @@ const Dashboard = () => {
 
   // Initialize clean empty complaints state
   const [complaints, setComplaints] = useState([]);
+  const [stats, setStats] = useState(null);
 
   const handleLogout = async () => {
     await logout();
@@ -130,6 +145,7 @@ const Dashboard = () => {
       const res = await api.put(`/complaints/${id}/status`, { action: newStatus });
       if (res.ok) {
         fetchComplaints();
+        fetchStats();
       }
     } catch (err) {
       console.error('Failed to update complaint status:', err);
@@ -233,11 +249,11 @@ const Dashboard = () => {
   const sortedComplaints = filteredComplaints;
 
   // KPI count statistics calculated dynamically from current scoped complaint records
-  const totalCount = displayComplaints.length;
-  const pendingCount = displayComplaints.filter(c => c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New').length;
-  const inprogressCount = displayComplaints.filter(c => c.status === 'In Progress').length;
-  const escalatedCount = displayComplaints.filter(c => c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed')).length;
-  const completedCount = displayComplaints.filter(c => c.status === 'Completed' || c.status === 'Resolved').length;
+  const totalCount = (user?.role === 'Warehouse Manager' && stats) ? stats.totalCount : displayComplaints.length;
+  const pendingCount = (user?.role === 'Warehouse Manager' && stats) ? stats.pendingCount : displayComplaints.filter(c => c.status === 'Pending' || c.status === 'Assigned' || c.status === 'New').length;
+  const inprogressCount = (user?.role === 'Warehouse Manager' && stats) ? stats.inprogressCount : displayComplaints.filter(c => c.status === 'In Progress').length;
+  const escalatedCount = (user?.role === 'Warehouse Manager' && stats) ? stats.escalatedCount : displayComplaints.filter(c => c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed')).length;
+  const completedCount = (user?.role === 'Warehouse Manager' && stats) ? stats.completedCount : displayComplaints.filter(c => c.status === 'Completed' || c.status === 'Resolved').length;
   const breachedCount = displayComplaints.filter(c => c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head').length;
 
   return (
