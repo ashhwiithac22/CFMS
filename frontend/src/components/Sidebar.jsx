@@ -28,11 +28,13 @@ const Sidebar = ({ activeTab, setActiveTab, handleLogout, isDesktop, sidebarOpen
   const renderSidebarContent = () => {
     const isSalesExec = user?.role === 'Sales Executive';
     const isWarehouseTeam = user?.role === 'Warehouse Team';
+    const isWarehouseManager = user?.role === 'Warehouse Manager';
 
     const allNavItems = [
       { name: 'Dashboard', icon: <Grid size={18} /> },
       { name: 'Raise Complaint', icon: <PlusCircle size={18} />, salesOnly: true },
       { name: 'My Complaints', icon: <FileText size={18} />, teamOnly: true },
+      { name: 'Escalated Complaints', icon: <FileText size={18} />, managerOnly: true },
       { name: 'Notifications', icon: <Bell size={18} />, badge: 5, badgeType: 'normal' },
       { name: 'Messages', icon: <MessageSquare size={18} />, badge: unreadMessagesCount, badgeType: 'high' },
       { name: 'Reports', icon: <BarChart3 size={18} /> },
@@ -42,6 +44,7 @@ const Sidebar = ({ activeTab, setActiveTab, handleLogout, isDesktop, sidebarOpen
     const navItems = allNavItems.filter(item => {
       if (item.salesOnly && !isSalesExec) return false;
       if (item.teamOnly && !isWarehouseTeam) return false;
+      if (item.managerOnly && !isWarehouseManager) return false;
       return true;
     });
 

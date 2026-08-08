@@ -67,8 +67,9 @@ router.get('/', authMiddleware, async (req, res, next) => {
 
     // Accept ?sort=priority or ?sort=date (default)
     const sortBy = req.query.sort === 'priority' ? 'priority' : 'date';
+    const history = req.query.history === 'true';
 
-    const complaints = await complaintRepo.findAll(userRole, userId, warehouseId, sortBy);
+    const complaints = await complaintRepo.findAll(userRole, userId, warehouseId, sortBy, history);
     res.status(200).json({
       success: true,
       data: { complaints }

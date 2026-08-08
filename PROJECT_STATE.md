@@ -117,9 +117,11 @@ Below is the SQL Server schema defining the tables and relations:
   - **Message**: Send a message to the Sales Executive who raised the complaint (scoped to the recipient).
 
 ### 3. Warehouse Manager
-- **Scope**: Can see only complaints for their warehouse that are escalated (status containing `'Escalated'` or equal to `'Escalated'`).
+- **Scope**:
+  - **Dashboard**: Shows active escalated complaints only (status is escalated and not completed).
+  - **Escalated Complaints Tab**: Shows full history of escalated complaints for their warehouse (active and completed/resolved).
 - **My Complaints Tab**: Removed from sidebar.
-- **Actions**: Escalate to Warehouse Head or respond to messages.
+- **Actions**: Exactly TWO actions: **Message** (to the Sales Executive) and **Complete** (resolves/completes the complaint). Take Action and Escalate buttons are removed.
 
 ### 4. Administrator
 - **Scope**: Dashboard does not show complaints.
@@ -139,7 +141,7 @@ Below is the SQL Server schema defining the tables and relations:
   - `0 hours left (SLA Breached)`: Triggers auto-escalation to the Warehouse Manager.
 
 ### 2. Take Action Behavior
-- Non-exclusive; multiple team members can sequentially claim a complaint. The latest member who clicks "Take Action" becomes the owner (`taken_action_by` updates, status stays `'In Progress'`).
+- Exclusive; once claimed (status becomes `'In Progress'`), the `"Take Action"` button disappears from the Dashboard for everyone. The claiming user becomes the sole owner (`taken_action_by` is set). The Dashboard view for all team members shows only `"Escalate"` and `"Message"` for that complaint. Sequential reassignment is disabled.
 
 ### 3. Completed Status
 - Shared final state ('Resolved'/'Completed'). Visible to all team members in the warehouse, the Sales Executive, and the owner. Row styling is rendered with a distinct premium green background.
@@ -173,3 +175,10 @@ Below is the SQL Server schema defining the tables and relations:
   - If status is `'In Progress'`: Dashboard shows `"Escalate"`, `"Message"`, and `"Take Action"`.
   - On the "My Complaints" page, the action available is `"Complete"`.
 - Enforced shared green row styling for `'Resolved'` / `'Completed'` complaints on Dashboard, My Complaints, and Sales Executive views.
+
+- **2026-08-08 (Enhancements & Bug Fixes)**
+  - Simplified and reversed the Take Action behavior to be exclusive: once claimed, the button disappears from the Dashboard for all team members (reassignment disabled).
+  - Fixed a database sequence generation bug in `complaint.repository.js` by querying the max sequence number using `ISNUMERIC` to avoid UNIQUE KEY constraint violations.
+  - Removed "Take Action" from Warehouse Manager entirely, leaving only "Complete" and "Message".
+  - Scoped Warehouse Manager's Dashboard to active escalated complaints and added a new "Escalated Complaints" sidebar history tab showing both active and completed escalated complaints.
+  - Fixed status badge text overlap ("Escalated to Manager") by increasing the Status column width to 145px in `ComplaintsTable.jsx`.

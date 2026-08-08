@@ -65,14 +65,6 @@ const ComplaintsTable = ({
           return (
             <>
               <Button 
-                key="takeAction"
-                size="sm"
-                variant="takeAction"
-                onClick={() => onStatusChange(comp.id, 'In Progress')}
-              >
-                Take Action
-              </Button>
-              <Button 
                 key="escalate"
                 size="sm"
                 variant="escalate"
@@ -83,7 +75,7 @@ const ComplaintsTable = ({
               {messageBtn}
             </>
           );
-        } else {
+        } else if (comp.status === 'New' || comp.status === 'Assigned' || comp.status === 'Pending') {
           return (
             <>
               <Button 
@@ -97,39 +89,29 @@ const ComplaintsTable = ({
               {messageBtn}
             </>
           );
+        } else {
+          return messageBtn;
         }
       }
     }
 
-    return (
-      <>
-        <Button 
-          key="takeAction"
-          size="sm"
-          variant="takeAction"
-          onClick={() => onStatusChange(comp.id, 'In Progress')}
-        >
-          Take Action
-        </Button>
-        <Button 
-          key="complete"
-          size="sm"
-          variant="complete"
-          onClick={() => onStatusChange(comp.id, 'Complete')}
-        >
-          Complete
-        </Button>
-        <Button 
-          key="escalate"
-          size="sm"
-          variant="escalate"
-          onClick={() => onStatusChange(comp.id, 'Escalate')}
-        >
-          Escalate
-        </Button>
-        {messageBtn}
-      </>
-    );
+    if (user?.role === 'Warehouse Manager') {
+      return (
+        <>
+          <Button 
+            key="complete"
+            size="sm"
+            variant="complete"
+            onClick={() => onStatusChange(comp.id, 'Complete')}
+          >
+            Complete
+          </Button>
+          {messageBtn}
+        </>
+      );
+    }
+
+    return messageBtn;
   };
 
   const [hoveredRowId, setHoveredRowId] = useState(null);
@@ -289,12 +271,12 @@ const ComplaintsTable = ({
             <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '14px 10px', width: '95px', minWidth: '95px', boxSizing: 'border-box', textAlign: 'left' }}>Complaint ID</th>
               <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Customer</th>
-              <th style={{ padding: '14px 10px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left' }}>Invoice #</th>
-              <th style={{ padding: '14px 10px', width: '150px', minWidth: '150px', boxSizing: 'border-box', textAlign: 'left' }}>Category</th>
+              <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Invoice #</th>
+              <th style={{ padding: '14px 10px', width: '140px', minWidth: '140px', boxSizing: 'border-box', textAlign: 'left' }}>Category</th>
               <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Raised By</th>
-              <th style={{ padding: '14px 10px', width: '130px', minWidth: '130px', boxSizing: 'border-box', textAlign: 'left' }}>Warehouse</th>
+              <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Warehouse</th>
               <th style={{ padding: '14px 10px', width: '80px', minWidth: '80px', boxSizing: 'border-box', textAlign: 'left' }}>SLA Timer</th>
-              <th style={{ padding: '14px 10px', width: '105px', minWidth: '105px', boxSizing: 'border-box', textAlign: 'left' }}>Status</th>
+              <th style={{ padding: '14px 10px', width: '145px', minWidth: '145px', boxSizing: 'border-box', textAlign: 'left' }}>Status</th>
               {isSalesExec && (
                 <th style={{ padding: '14px 6px', width: '55px', minWidth: '55px', boxSizing: 'border-box', textAlign: 'center' }}>Attach</th>
               )}
@@ -353,11 +335,11 @@ const ComplaintsTable = ({
                       {comp.customer}
                     </td>
 
-                    <td style={{ padding: '12px 10px', width: '120px', minWidth: '120px', boxSizing: 'border-box', textAlign: 'left', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
+                    <td style={{ padding: '12px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
                       {comp.invoice}
                     </td>
 
-                    <td style={{ padding: '12px 10px', width: '160px', minWidth: '160px', boxSizing: 'border-box', textAlign: 'left' }}>
+                    <td style={{ padding: '12px 10px', width: '140px', minWidth: '140px', boxSizing: 'border-box', textAlign: 'left' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <Badge color={getBadgeColorForCategory(comp.type)}>{comp.type}</Badge>
                         <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>{comp.subtype}</span>
@@ -371,7 +353,7 @@ const ComplaintsTable = ({
                       </div>
                     </td>
 
-                    <td style={{ padding: '12px 10px', width: '130px', minWidth: '130px', boxSizing: 'border-box', textAlign: 'left' }}>
+                    <td style={{ padding: '12px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--brand-primary)', flexShrink: 0 }} />
                         <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -387,7 +369,7 @@ const ComplaintsTable = ({
                       </div>
                     </td>
 
-                    <td style={{ padding: '12px 10px', width: '105px', minWidth: '105px', boxSizing: 'border-box', textAlign: 'left' }}>
+                    <td style={{ padding: '12px 10px', width: '145px', minWidth: '145px', boxSizing: 'border-box', textAlign: 'left' }}>
                       {renderStatusBadge(comp)}
                     </td>
 

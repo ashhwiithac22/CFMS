@@ -75,7 +75,11 @@ const Dashboard = () => {
     try {
       // Map frontend label to backend param value
       const sortParam = sort === 'Priority' ? 'priority' : 'date';
-      const res = await api.get(`/complaints?sort=${sortParam}`);
+      let url = `/complaints?sort=${sortParam}`;
+      if (user?.role === 'Warehouse Manager' && activeTab === 'Escalated Complaints') {
+        url += '&history=true';
+      }
+      const res = await api.get(url);
       if (res.ok) {
         const data = await res.json();
         setComplaints(data.data.complaints || []);
@@ -98,22 +102,20 @@ const Dashboard = () => {
   };
 
   // Initial load + polling (refresh every 8s)
+  // Load and poll complaints + metadata on mount, tab change, or sort change
   useEffect(() => {
     refreshUnreadCount();
     fetchComplaints(sortBy);
     fetchMetadata();
+    setCurrentPage(1); // Reset to page 1 on tab/sort change
+    
     const interval = setInterval(() => {
       refreshUnreadCount();
       fetchComplaints(sortBy);
     }, 8000);
+    
     return () => clearInterval(interval);
-  }, []);
-
-  // Re-fetch from backend whenever sortBy changes (backend enforces ORDER BY)
-  useEffect(() => {
-    fetchComplaints(sortBy);
-    setCurrentPage(1); // Reset to page 1 on sort change
-  }, [sortBy]);
+  }, [sortBy, activeTab, user]);
 
   // Initialize clean empty complaints state
   const [complaints, setComplaints] = useState([]);
@@ -288,20 +290,21 @@ const Dashboard = () => {
             boxSizing: 'border-box'
           }}
         >
-          {/* ─────────────────────────────── MY COMPLAINTS VIEW ─────────────────────────────── */}
-          {activeTab === 'My Complaints' ? (
+          {/* ─────────────────────────────── MY COMPLAINTS / ESCALATED VIEW ─────────────────────────────── */}
+          {activeTab === 'My Complaints' || activeTab === 'Escalated Complaints' ? (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h1 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
-                    My Complaints
+                    {activeTab}
                   </h1>
                   <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                    {user?.role === 'Sales Executive' && 'All complaints raised by you — filtered to your account only.'}
-                    {user?.role === 'Warehouse Team' && 'Shared complaint queue for your warehouse — all team members see the same list.'}
-                    {user?.role === 'Warehouse Manager' && 'Escalated complaints for your warehouse that require your attention.'}
-                    {user?.role === 'Administrator' && 'Global view — all complaints across every warehouse.'}
+                    {activeTab === 'My Complaints' ? (
+                      'Your claimed complaints requiring resolution.'
+                    ) : (
+                      'Historical and active escalated complaints requiring manager attention.'
+                    )}
                   </p>
                 </div>
                 <button

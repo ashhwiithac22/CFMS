@@ -18,8 +18,12 @@ class ComplaintRepository {
     const pool = getPool();
 
     // 1. Auto-generate next complaint_number e.g. CMP-0001
-    const countRes = await pool.request().query('SELECT COUNT(*) AS total FROM Complaints');
-    const nextSeq = (countRes.recordset[0].total || 0) + 1;
+    const maxRes = await pool.request().query(`
+      SELECT MAX(CAST(SUBSTRING(complaint_number, 5, 8) AS INT)) AS maxSeq 
+      FROM Complaints
+      WHERE ISNUMERIC(SUBSTRING(complaint_number, 5, 8)) = 1
+    `);
+    const nextSeq = (maxRes.recordset[0].maxSeq || 0) + 1;
     const complaintNumber = `CMP-${String(nextSeq).padStart(4, '0')}`;
 
     // 2. Lookup Warehouse Team user for auto-assignment based on selected warehouse_id
@@ -76,7 +80,7 @@ class ComplaintRepository {
     };
   }
 
-  async findAll(userRole, userId, warehouseId, sortBy = 'date') {
+  async findAll(userRole, userId, warehouseId, sortBy = 'date', history = false) {
     const pool = getPool();
 
     // 1. Automatic Escalation Check for expired SLAs past 24 hours
@@ -118,8 +122,12 @@ class ComplaintRepository {
     } else if (userRole === 'Warehouse Team') {
       whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND c.status <> 'Closed'`;
     } else if (userRole === 'Warehouse Manager') {
-      // Warehouse Managers MUST ONLY see complaints for their warehouse that have reached Escalated status!
-      whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated') AND c.status <> 'Closed'`;
+      if (history) {
+        whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated' OR c.escalated_to_manager_at IS NOT NULL) AND c.status <> 'Closed'`;
+      } else {
+        // Warehouse Managers MUST ONLY see complaints for their warehouse that have reached Escalated status!
+        whereClause += ` AND c.warehouse_id = ${parseInt(warehouseId || 0, 10)} AND (c.status LIKE '%Escalated%' OR c.status = 'Escalated') AND c.status <> 'Closed'`;
+      }
     }
 
     // Build ORDER BY clause based on sortBy parameter
