@@ -170,7 +170,11 @@ const RaiseComplaint = () => {
         <Sidebar 
           activeTab="Raise Complaint"
           setActiveTab={(tab) => {
-            if (tab === 'Dashboard') navigate('/dashboard');
+            if (tab === 'Dashboard') {
+              navigate('/dashboard');
+            } else {
+              navigate('/dashboard', { state: { activeTab: tab } });
+            }
           }}
           handleLogout={() => {
             localStorage.removeItem('user_logged_in');

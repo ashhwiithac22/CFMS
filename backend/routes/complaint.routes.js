@@ -79,6 +79,28 @@ router.get('/', authMiddleware, async (req, res, next) => {
   }
 });
 
+// GET /api/complaints/:id
+router.get('/:id', authMiddleware, async (req, res, next) => {
+  try {
+    console.log("BACKEND GET SINGLE COMPLAINT ID:", req.params.id);
+    const complaint = await complaintRepo.findById(req.params.id);
+    console.log("BACKEND GET SINGLE COMPLAINT FOUND:", complaint ? complaint.id : null);
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: { complaint }
+    });
+  } catch (err) {
+    console.error("BACKEND GET SINGLE COMPLAINT ERROR:", err);
+    next(err);
+  }
+});
+
 // POST /api/complaints
 // Creates a new complaint (Restricted to Sales Executive only)
 router.post('/', authMiddleware, (req, res, next) => {
@@ -133,6 +155,8 @@ router.post('/', authMiddleware, (req, res, next) => {
     }
   });
 });
+
+
 
 // PUT /api/complaints/:id/status
 // Updates complaint action status (Take Action, Complete, Escalate)

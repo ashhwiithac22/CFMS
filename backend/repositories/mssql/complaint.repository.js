@@ -360,6 +360,78 @@ class ComplaintRepository {
       completedCount: row.completedCount || 0
     };
   }
+
+  async findById(id) {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('id', sql.VarChar, String(id))
+      .query(`
+        SELECT 
+          c.id AS db_id,
+          c.complaint_number AS id_display,
+          c.customer_code AS customer,
+          c.invoice_number AS invoice,
+          ct.name AS type,
+          cs.name AS subtype,
+          (u_sales.first_name + ' ' + u_sales.last_name) AS raisedBy,
+          CONVERT(VARCHAR(20), c.raised_at, 106) AS date,
+          CONVERT(VARCHAR(30), c.raised_at, 126) AS raised_at_iso,
+          c.status,
+          w.name AS warehouse_name,
+          c.attachment_url,
+          DATEDIFF(hour, GETDATE(), c.warehouse_team_deadline) AS hours_left,
+          c.taken_action_by,
+          c.sales_executive_id,
+          c.warehouse_id
+        FROM Complaints c
+        JOIN Users u_sales ON c.sales_executive_id = u_sales.id
+        JOIN Warehouses w ON c.warehouse_id = w.id
+        JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
+        LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
+        WHERE c.complaint_number = @id OR CAST(c.id AS VARCHAR) = @id
+      `);
+
+    const row = result.recordset[0];
+    if (!row) return null;
+
+    const isResolved = row.status === 'Resolved' || row.status === 'Completed';
+    let slaText = 'Resolved';
+    if (!isResolved) {
+      slaText = row.hours_left > 0 ? `${row.hours_left}h` : 'Expired !';
+    }
+
+    let priorityLabel;
+    if (row.status && row.status.includes('Escalated')) {
+      priorityLabel = 'Critical';
+    } else if (!isResolved && row.hours_left < 6) {
+      priorityLabel = 'High';
+    } else if (!isResolved && row.hours_left <= 12) {
+      priorityLabel = 'Medium';
+    } else if (isResolved) {
+      priorityLabel = 'Completed';
+    } else {
+      priorityLabel = 'Low';
+    }
+
+    return {
+      id: row.id_display,
+      customer: row.customer,
+      invoice: row.invoice,
+      type: row.type,
+      subtype: row.subtype || 'General',
+      raisedBy: row.raisedBy,
+      date: row.date,
+      raised_at: row.raised_at_iso,
+      sla: slaText,
+      hours_left: isResolved ? 999 : row.hours_left,
+      status: row.status,
+      priority: priorityLabel,
+      department: row.warehouse_name,
+      taken_action_by: row.taken_action_by,
+      sales_executive_id: row.sales_executive_id,
+      warehouse_id: row.warehouse_id
+    };
+  }
 }
 
 module.exports = ComplaintRepository;

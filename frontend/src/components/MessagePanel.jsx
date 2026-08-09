@@ -17,7 +17,8 @@ const MessagePanel = ({
   currentUserId,
   attachmentFile,
   setAttachmentFile,
-  setSelectedRecipient
+  setSelectedRecipient,
+  preselectedRecipientId
 }) => {
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -53,7 +54,10 @@ const MessagePanel = ({
           setRecipients(recs);
           setCountText(result.data.countText || '');
           if (recs.length > 0) {
-            const defaultRec = recs[0];
+            const hasPreselected = preselectedRecipientId && recs.some(r => String(r.id) === String(preselectedRecipientId));
+            const defaultRec = hasPreselected 
+              ? recs.find(r => String(r.id) === String(preselectedRecipientId))
+              : recs[0];
             setSelectedRecipientId(String(defaultRec.id));
             if (setSelectedRecipient) {
               setSelectedRecipient(defaultRec);
@@ -142,6 +146,7 @@ const MessagePanel = ({
   return (
     <AnimatePresence>
       <div 
+        id="message-panel-overlay"
         style={{
           position: 'fixed',
           inset: 0,
@@ -216,7 +221,7 @@ const MessagePanel = ({
             }}
           >
             <MessageSquare size={16} style={{ color: 'var(--brand-primary)' }} />
-            <span>Complaint Messaging Thread — {replyToComplaint.id} ({replyToComplaint.customer})</span>
+            <span>{replyToComplaint.id === 'DIRECT' ? 'Direct Messaging Thread' : `Complaint Messaging Thread — ${replyToComplaint.id} (${replyToComplaint.customer})`}</span>
           </div>
 
           {/* Dynamic Recipient Selector Bar */}

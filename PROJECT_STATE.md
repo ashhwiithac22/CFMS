@@ -104,7 +104,7 @@ Below is the SQL Server schema defining the tables and relations:
 
 ### 1. Sales Executive
 - **Scope**: Can see only complaints raised by themselves.
-- **Actions**: Can raise new complaints and send messages to Warehouse Team members.
+- **Actions**: Can raise new complaints and send messages to both Warehouse Team members and the Warehouse Manager at any time.
 - **My Complaints Tab**: Removed from sidebar (redundant since Dashboard matches this view).
 
 ### 2. Warehouse Team
@@ -114,14 +114,14 @@ Below is the SQL Server schema defining the tables and relations:
   - **Take Action**: Non-exclusive claim button. Updates `taken_action_by` to the claiming user, sets status to `'In Progress'`, and updates history.
   - **Complete**: Sets status to `'Resolved'`. Available on the "My Complaints" tab.
   - **Escalate**: Changes status to `'Escalated to Manager'`.
-  - **Message**: Send a message to the Sales Executive who raised the complaint (scoped to the recipient).
+  - **Message**: Send messages to both the Sales Executive who raised the complaint and the Warehouse Manager (scoped to the recipient).
 
 ### 3. Warehouse Manager
 - **Scope**:
   - **Dashboard**: Shows active escalated complaints only (status is escalated/in progress and not completed).
   - **Escalated Complaints Tab**: Shows full history of escalated complaints for their warehouse (active and completed/resolved).
 - **My Complaints Tab**: Removed from sidebar.
-- **Actions**: Exactly THREE actions: **Message** (to the Sales Executive), **Complete** (resolves/completes the complaint), and **Take Action** (available on unclaimed escalated complaints, moves the status to 'In Progress' and claims the complaint).
+- **Actions**: Exactly THREE actions: **Message** (can message both the Sales Executive and all Warehouse Team members), **Complete** (resolves/completes the complaint), and **Take Action** (available on unclaimed escalated complaints, moves the status to 'In Progress' and claims the complaint).
 - **Stat Cards** (scoped to their warehouse only):
   - **Total Logs**: Total count of all complaints ever raised for the manager's warehouse (regardless of status or escalation).
   - **Pending**: Complaints escalated to the manager but not yet claimed by them (status: Escalated, no manager claim).
@@ -160,6 +160,16 @@ Below is the SQL Server schema defining the tables and relations:
 ### 5. Messaging Scoping & Thread Isolation
 - Messages are fully isolated and scoped per `(complaint_id + recipient_id)` pair, ensuring privacy and clear lines of communication.
 
+### 5b. Expanded Messaging Matrix
+- **Sales Executive**: Can message both Warehouse Team and Warehouse Manager at any time (regardless of complaint escalation status).
+- **Warehouse Team**: Can message both Sales Executive and their Warehouse Manager.
+- **Warehouse Manager**: Can message both Sales Executive and all Warehouse Team members.
+
+### 5c. Notification System
+- **Real-Time Cross-Role Notifications**: When a user sends a message, a notification is created for the recipient.
+- **Navbar & Sidebar Badges**: The recipient sees dynamic unread message count badges in the header bell icon and the sidebar menu item.
+- **Notifications Page**: Displays a chronological list of recent unread/read messages. Clicking a notification automatically navigates to the thread, opens the Message Panel overlay, selects the correct recipient, and marks all received messages for that complaint as Read.
+
 ### 6. Warehouse-to-User Mapping
 - Users (except Sales Executives and Admin) are mapped to a specific warehouse via the `warehouse_id` foreign key.
 
@@ -192,3 +202,15 @@ Below is the SQL Server schema defining the tables and relations:
   - Re-introduced "Take Action" button specifically for the Warehouse Manager role to claim escalated complaints, updating status to `'In Progress'` and moving them in the stat cards.
   - Fixed Warehouse Manager's stat cards (Total Logs, Pending, In Progress, Escalated, Completed) to correctly pull from the full historical database scope using robust SQL queries.
   - Verified live E2E counts increments/decrements in browser and cross-checked counts with direct SQL queries.
+
+### 2026-08-09
+- Implemented real-time cross-role Notification System:
+  - Created backend routes and database-backed repository methods for unread message counts, notifications feed, and mark-as-read updates.
+  - Added bell count indicator in Navbar header and sidebar notification badge on the React frontend.
+  - Built a dedicated Notifications page displaying recent message notifications.
+  - Configured notification click handler to automatically retrieve the associated complaint details, launch the messaging panel modal, pre-select the sender, and mark the thread as read.
+- Implemented Expanded Messaging Permission Matrix:
+  - Removed escalation gating for Sales Executive communication. Sales Executive can now message both Warehouse Team and Warehouse Manager at any time.
+  - Warehouse Team members can message both Sales Executive and Warehouse Manager.
+  - Warehouse Managers can message both Sales Executive and all Warehouse Team members.
+- Configured E2E Playwright test suite verifying the notifications count badges, Notifications page clicking, and thread isolation.

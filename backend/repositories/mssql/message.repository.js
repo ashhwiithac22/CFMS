@@ -23,29 +23,39 @@ class MessageRepository {
   async findByComplaintId(complaintId, userId, userRole, recipientId) {
     const pool = getPool();
     const req = pool.request();
-    req.input('complaint_id', sql.VarChar, String(complaintId));
+
+    if (userId) {
+      req.input('user_id', sql.Int, parseInt(userId, 10));
+    }
+    if (recipientId) {
+      req.input('recipient_id', sql.Int, parseInt(recipientId, 10));
+    }
+
+    if (complaintId === 'DIRECT' && !recipientId) {
+      return [];
+    }
 
     let query = `
       SELECT m.*, (u.first_name + ' ' + u.last_name) AS sender_name 
       FROM Messages m
       LEFT JOIN Users u ON m.sender_id = u.id
-      WHERE m.complaint_id = @complaint_id
     `;
 
-    if (userId) {
-      req.input('user_id', sql.Int, parseInt(userId, 10));
-
-      if (userRole === 'Sales Executive') {
-        if (recipientId) {
-          req.input('recipient_id', sql.Int, parseInt(recipientId, 10));
-          query += ` AND ((m.sender_id = @user_id AND m.recipient_id = @recipient_id) OR (m.sender_id = @recipient_id AND m.recipient_id = @user_id))`;
+    if (complaintId === 'DIRECT') {
+      query += ` WHERE ((m.sender_id = @user_id AND m.recipient_id = @recipient_id) OR (m.sender_id = @recipient_id AND m.recipient_id = @user_id))`;
+    } else {
+      req.input('complaint_id', sql.VarChar, String(complaintId));
+      query += ` WHERE m.complaint_id = @complaint_id`;
+      if (userId) {
+        if (userRole === 'Sales Executive') {
+          if (recipientId) {
+            query += ` AND ((m.sender_id = @user_id AND m.recipient_id = @recipient_id) OR (m.sender_id = @recipient_id AND m.recipient_id = @user_id))`;
+          } else {
+            query += ` AND 1 = 0`;
+          }
         } else {
-          // If Sales Executive has not specified a recipient yet, return empty thread
-          query += ` AND 1 = 0`;
+          query += ` AND (m.sender_id = @user_id OR m.recipient_id = @user_id)`;
         }
-      } else {
-        // For Warehouse Team / Warehouse Manager: return ONLY messages where current user is sender or recipient
-        query += ` AND (m.sender_id = @user_id OR m.recipient_id = @user_id)`;
       }
     }
 
@@ -55,19 +65,31 @@ class MessageRepository {
     return result.recordset;
   }
 
-  async markAsRead(complaintId, userId, userRole) {
+  async markAsRead(complaintId, userId, userRole, senderId) {
     const pool = getPool();
-    await pool.request()
-      .input('complaint_id', sql.VarChar, String(complaintId))
+    const req = pool.request()
       .input('user_id', sql.Int, parseInt(userId, 10))
-      .input('user_role', sql.VarChar, userRole)
-      .query(`
+      .input('user_role', sql.VarChar, userRole);
+
+    if (complaintId === 'DIRECT' && senderId) {
+      req.input('sender_id', sql.Int, parseInt(senderId, 10));
+      await req.query(`
+        UPDATE Messages 
+        SET read_status = 'Read'
+        WHERE (recipient_id = @user_id OR (recipient_id IS NULL AND recipient_role = @user_role))
+          AND sender_id = @sender_id
+          AND read_status = 'Unread'
+      `);
+    } else {
+      req.input('complaint_id', sql.VarChar, String(complaintId));
+      await req.query(`
         UPDATE Messages 
         SET read_status = 'Read'
         WHERE complaint_id = @complaint_id 
           AND (recipient_id = @user_id OR (recipient_id IS NULL AND recipient_role = @user_role))
           AND read_status = 'Unread'
       `);
+    }
   }
 
   async getUnreadCount(userId, userRole) {
@@ -85,6 +107,92 @@ class MessageRepository {
     return result.recordset[0].count;
   }
 
+  async getContacts(userId, userRole) {
+    const pool = getPool();
+    
+    const userRes = await pool.request()
+      .input('user_id', sql.Int, parseInt(userId, 10))
+      .query('SELECT warehouse_id FROM Users WHERE id = @user_id');
+    const currentUserWarehouseId = userRes.recordset[0]?.warehouse_id;
+
+    let query = '';
+    const req = pool.request();
+    req.input('user_id', sql.Int, parseInt(userId, 10));
+
+    if (userRole === 'Sales Executive') {
+      query = `
+        SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.username, u.email, w.name AS warehouse_name
+        FROM Users u
+        JOIN Warehouses w ON u.warehouse_id = w.id
+        WHERE u.status = 'Active'
+          AND u.role IN ('Warehouse Team', 'Warehouse Manager')
+          AND u.warehouse_id IN (
+            SELECT DISTINCT warehouse_id 
+            FROM Complaints 
+            WHERE sales_executive_id = @user_id
+          )
+        ORDER BY u.role DESC, u.first_name ASC
+      `;
+    } else if (userRole === 'Warehouse Team') {
+      if (!currentUserWarehouseId) return [];
+      req.input('warehouse_id', sql.Int, currentUserWarehouseId);
+      query = `
+        SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.username, u.email, w.name AS warehouse_name
+        FROM Users u
+        LEFT JOIN Warehouses w ON u.warehouse_id = w.id
+        WHERE u.status = 'Active'
+          AND (
+            (u.role = 'Sales Executive' AND u.id IN (
+              SELECT DISTINCT sales_executive_id 
+              FROM Complaints 
+              WHERE warehouse_id = @warehouse_id
+            ))
+            OR (u.role = 'Warehouse Manager' AND u.warehouse_id = @warehouse_id)
+            OR (u.role = 'Warehouse Team' AND u.warehouse_id = @warehouse_id AND u.id <> @user_id)
+          )
+        ORDER BY u.role DESC, u.first_name ASC
+      `;
+    } else if (userRole === 'Warehouse Manager') {
+      if (!currentUserWarehouseId) return [];
+      req.input('warehouse_id', sql.Int, currentUserWarehouseId);
+      query = `
+        SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.username, u.email, w.name AS warehouse_name
+        FROM Users u
+        LEFT JOIN Warehouses w ON u.warehouse_id = w.id
+        WHERE u.status = 'Active'
+          AND (
+            (u.role = 'Sales Executive' AND u.id IN (
+              SELECT DISTINCT sales_executive_id 
+              FROM Complaints 
+              WHERE warehouse_id = @warehouse_id
+            ))
+            OR (u.role = 'Warehouse Team' AND u.warehouse_id = @warehouse_id)
+          )
+        ORDER BY u.role DESC, u.first_name ASC
+      `;
+    } else {
+      query = `
+        SELECT u.id, u.first_name, u.last_name, u.role, u.username, u.email, w.name AS warehouse_name
+        FROM Users u
+        LEFT JOIN Warehouses w ON u.warehouse_id = w.id
+        WHERE u.status = 'Active'
+          AND u.role <> 'Administrator'
+          AND u.id <> @user_id
+        ORDER BY u.role DESC, u.first_name ASC
+      `;
+    }
+
+    const result = await req.query(query);
+    return result.recordset.map(u => ({
+      id: u.id,
+      name: `${u.first_name} ${u.last_name}`,
+      role: u.role,
+      username: u.username,
+      email: u.email,
+      warehouseName: u.warehouse_name || 'N/A'
+    }));
+  }
+
   async getNotificationsForUser(userId, userRole) {
     const pool = getPool();
     const result = await pool.request()
@@ -94,6 +202,7 @@ class MessageRepository {
         SELECT TOP 10 
           m.id, 
           m.complaint_id, 
+          m.sender_id,
           m.message_text, 
           m.read_status, 
           m.created_at,
@@ -109,7 +218,10 @@ class MessageRepository {
     return result.recordset.map(row => ({
       id: row.id,
       complaint_id: row.complaint_id,
-      title: `${row.sender_name} sent you a message regarding Complaint ${row.complaint_id}`,
+      sender_id: row.sender_id,
+      title: row.complaint_id === 'DIRECT'
+        ? `${row.sender_name} sent you a direct message`
+        : `${row.sender_name} sent you a message regarding Complaint ${row.complaint_id}`,
       preview: row.message_text ? row.message_text.substring(0, 60) : 'Attachment sent',
       sender_name: row.sender_name,
       sender_role: row.sender_role,
@@ -120,6 +232,24 @@ class MessageRepository {
 
   async getRecipientsForComplaint(complaintId, currentUserId, currentUserRole) {
     const pool = getPool();
+    
+    if (complaintId === 'DIRECT') {
+      const contacts = await this.getContacts(currentUserId, currentUserRole);
+      return {
+        complaint_number: 'DIRECT',
+        warehouse_name: 'N/A',
+        status: 'Active',
+        isEscalated: false,
+        countText: 'Authorized Contacts',
+        memberCount: contacts.length,
+        recipients: contacts.map(c => ({
+          id: c.id,
+          name: `${c.name} (${c.role})`,
+          role: c.role,
+          username: c.username
+        }))
+      };
+    }
     
     // 1. Lookup complaint details
     const compRes = await pool.request()
@@ -142,75 +272,101 @@ class MessageRepository {
     let memberCount = 0;
 
     if (currentUserRole === 'Sales Executive') {
-      if (!isEscalated) {
-        // Stage 1 (Assigned / In Progress): Warehouse Team members only
-        const usersRes = await pool.request()
-          .input('warehouse_id', sql.Int, complaint.warehouse_id)
-          .input('current_user_id', sql.Int, parseInt(currentUserId, 10))
-          .query(`
-            SELECT u.id, (u.first_name + ' ' + u.last_name) AS name, u.username, u.email, u.role
-            FROM Users u
-            WHERE u.role = 'Warehouse Team' 
-              AND u.warehouse_id = @warehouse_id 
-              AND u.status = 'Active'
-              AND u.id <> @current_user_id
-            ORDER BY u.first_name ASC
-          `);
-
-        recipients = usersRes.recordset.map(u => ({
-          id: u.id,
-          name: u.name,
-          role: u.role,
-          username: u.username
-        }));
-
-        memberCount = recipients.length;
-        countText = `Warehouse Team Members (${memberCount} Members)`;
-      } else {
-        // Stage 2 (Escalated): Warehouse Team AND Warehouse Manager
-        const usersRes = await pool.request()
-          .input('warehouse_id', sql.Int, complaint.warehouse_id)
-          .input('current_user_id', sql.Int, parseInt(currentUserId, 10))
-          .query(`
-            SELECT u.id, (u.first_name + ' ' + u.last_name) AS name, u.username, u.email, u.role
-            FROM Users u
-            WHERE u.role IN ('Warehouse Team', 'Warehouse Manager')
-              AND u.warehouse_id = @warehouse_id 
-              AND u.status = 'Active'
-              AND u.id <> @current_user_id
-            ORDER BY u.role DESC, u.first_name ASC
-          `);
-
-        recipients = usersRes.recordset.map(u => ({
-          id: u.id,
-          name: `${u.name} (${u.role})`,
-          role: u.role,
-          username: u.username
-        }));
-
-        memberCount = recipients.length;
-        countText = `Escalated — Warehouse Team & Manager Available (${memberCount} Members)`;
-      }
-    } else {
-      // Warehouse Team / Manager replying to Sales Executive
-      const salesUserRes = await pool.request()
-        .input('sales_id', sql.Int, complaint.sales_executive_id)
+      // Sales Executive can message BOTH Warehouse Team and Warehouse Manager of this complaint's warehouse
+      const usersRes = await pool.request()
+        .input('warehouse_id', sql.Int, complaint.warehouse_id)
         .input('current_user_id', sql.Int, parseInt(currentUserId, 10))
         .query(`
           SELECT u.id, (u.first_name + ' ' + u.last_name) AS name, u.username, u.email, u.role
           FROM Users u
-          WHERE u.id = @sales_id AND u.id <> @current_user_id
+          WHERE u.role IN ('Warehouse Team', 'Warehouse Manager')
+            AND u.warehouse_id = @warehouse_id 
+            AND u.status = 'Active'
+            AND u.id <> @current_user_id
+          ORDER BY u.role DESC, u.first_name ASC
         `);
 
-      recipients = salesUserRes.recordset.map(u => ({
+      recipients = usersRes.recordset.map(u => ({
         id: u.id,
-        name: `${u.name} (Sales Executive)`,
+        name: `${u.name} (${u.role})`,
         role: u.role,
         username: u.username
       }));
 
       memberCount = recipients.length;
-      countText = `Replying to Sales Executive`;
+      countText = `Warehouse Team & Manager Available (${memberCount} Members)`;
+    } else if (currentUserRole === 'Warehouse Team') {
+      // Warehouse Team can message: Sales Executive of this complaint, AND their Warehouse Manager
+      const usersRes = await pool.request()
+        .input('sales_id', sql.Int, complaint.sales_executive_id)
+        .input('warehouse_id', sql.Int, complaint.warehouse_id)
+        .input('current_user_id', sql.Int, parseInt(currentUserId, 10))
+        .query(`
+          SELECT u.id, (u.first_name + ' ' + u.last_name) AS name, u.username, u.email, u.role
+          FROM Users u
+          WHERE (u.id = @sales_id OR (u.role = 'Warehouse Manager' AND u.warehouse_id = @warehouse_id))
+            AND u.status = 'Active'
+            AND u.id <> @current_user_id
+          ORDER BY u.role DESC, u.first_name ASC
+        `);
+
+      recipients = usersRes.recordset.map(u => ({
+        id: u.id,
+        name: `${u.name} (${u.role})`,
+        role: u.role,
+        username: u.username
+      }));
+
+      memberCount = recipients.length;
+      countText = `Sales Executive & Warehouse Manager Available (${memberCount} Members)`;
+    } else if (currentUserRole === 'Warehouse Manager') {
+      // Warehouse Manager can message: Sales Executive of this complaint, AND Warehouse Team members of their warehouse
+      const usersRes = await pool.request()
+        .input('sales_id', sql.Int, complaint.sales_executive_id)
+        .input('warehouse_id', sql.Int, complaint.warehouse_id)
+        .input('current_user_id', sql.Int, parseInt(currentUserId, 10))
+        .query(`
+          SELECT u.id, (u.first_name + ' ' + u.last_name) AS name, u.username, u.email, u.role
+          FROM Users u
+          WHERE (u.id = @sales_id OR (u.role = 'Warehouse Team' AND u.warehouse_id = @warehouse_id))
+            AND u.status = 'Active'
+            AND u.id <> @current_user_id
+          ORDER BY u.role DESC, u.first_name ASC
+        `);
+
+      recipients = usersRes.recordset.map(u => ({
+        id: u.id,
+        name: `${u.name} (${u.role})`,
+        role: u.role,
+        username: u.username
+      }));
+
+      memberCount = recipients.length;
+      countText = `Sales Executive & Warehouse Team Members Available (${memberCount} Members)`;
+    } else {
+      // Fallback (e.g. Administrator or other role)
+      const usersRes = await pool.request()
+        .input('sales_id', sql.Int, complaint.sales_executive_id)
+        .input('warehouse_id', sql.Int, complaint.warehouse_id)
+        .input('current_user_id', sql.Int, parseInt(currentUserId, 10))
+        .query(`
+          SELECT u.id, (u.first_name + ' ' + u.last_name) AS name, u.username, u.email, u.role
+          FROM Users u
+          WHERE (u.id = @sales_id OR u.warehouse_id = @warehouse_id)
+            AND u.status = 'Active'
+            AND u.id <> @current_user_id
+          ORDER BY u.role DESC, u.first_name ASC
+        `);
+
+      recipients = usersRes.recordset.map(u => ({
+        id: u.id,
+        name: `${u.name} (${u.role})`,
+        role: u.role,
+        username: u.username
+      }));
+
+      memberCount = recipients.length;
+      countText = `All Warehouse Contacts (${memberCount} Members)`;
     }
 
     return {
@@ -227,9 +383,9 @@ class MessageRepository {
   async validateMessageRules(complaintId, senderId, senderRole, recipientId) {
     const pool = getPool();
 
-    // 1. Rule 1: Sender cannot message themselves
+    // 1. Sender cannot message themselves
     if (parseInt(senderId, 10) === parseInt(recipientId, 10)) {
-      throw new Error('Sales Executive cannot message themselves');
+      throw new Error('Sender cannot message themselves');
     }
 
     // 2. Lookup recipient
@@ -242,6 +398,63 @@ class MessageRepository {
       throw new Error('Invalid or inactive message recipient');
     }
 
+    // Lookup sender for warehouse info
+    const senderRes = await pool.request()
+      .input('id', sql.Int, parseInt(senderId, 10))
+      .query('SELECT warehouse_id FROM Users WHERE id = @id');
+    const senderWarehouseId = senderRes.recordset[0]?.warehouse_id;
+
+    if (complaintId === 'DIRECT') {
+      if (senderRole === 'Sales Executive') {
+        if (recipient.role !== 'Warehouse Team' && recipient.role !== 'Warehouse Manager') {
+          throw new Error('Sales Executive can only message Warehouse Team or Warehouse Manager');
+        }
+        const compRes = await pool.request()
+          .input('sales_id', sql.Int, parseInt(senderId, 10))
+          .input('warehouse_id', sql.Int, recipient.warehouse_id)
+          .query('SELECT COUNT(*) as count FROM Complaints WHERE sales_executive_id = @sales_id AND warehouse_id = @warehouse_id');
+        if (compRes.recordset[0].count === 0) {
+          throw new Error('Recipient does not belong to any warehouse handling your complaints');
+        }
+      } else if (senderRole === 'Warehouse Team') {
+        const isSalesExec = recipient.role === 'Sales Executive';
+        const isMyManager = recipient.role === 'Warehouse Manager' && recipient.warehouse_id === senderWarehouseId;
+        const isMyTeam = recipient.role === 'Warehouse Team' && recipient.warehouse_id === senderWarehouseId;
+        
+        if (isSalesExec) {
+          const compRes = await pool.request()
+            .input('sales_id', sql.Int, recipient.id)
+            .input('warehouse_id', sql.Int, senderWarehouseId)
+            .query('SELECT COUNT(*) as count FROM Complaints WHERE sales_executive_id = @sales_id AND warehouse_id = @warehouse_id');
+          if (compRes.recordset[0].count === 0) {
+            throw new Error('Cannot message Sales Executive who has no complaints in your warehouse');
+          }
+        } else if (!isMyManager && !isMyTeam) {
+          throw new Error('Warehouse Team can only message the Sales Executive, their Warehouse Manager, or other Warehouse Team members');
+        }
+      } else if (senderRole === 'Warehouse Manager') {
+        const isSalesExec = recipient.role === 'Sales Executive';
+        const isMyTeam = recipient.role === 'Warehouse Team' && recipient.warehouse_id === senderWarehouseId;
+        
+        if (isSalesExec) {
+          const compRes = await pool.request()
+            .input('sales_id', sql.Int, recipient.id)
+            .input('warehouse_id', sql.Int, senderWarehouseId)
+            .query('SELECT COUNT(*) as count FROM Complaints WHERE sales_executive_id = @sales_id AND warehouse_id = @warehouse_id');
+          if (compRes.recordset[0].count === 0) {
+            throw new Error('Cannot message Sales Executive who has no complaints in your warehouse');
+          }
+        } else if (!isMyTeam) {
+          throw new Error('Warehouse Manager can only message the Sales Executive or Warehouse Team members');
+        }
+      }
+
+      return {
+        recipient_id: recipient.id,
+        recipient_role: recipient.role
+      };
+    }
+
     // 3. Lookup complaint
     const compRes = await pool.request()
       .input('complaint_id', sql.VarChar, String(complaintId))
@@ -252,16 +465,26 @@ class MessageRepository {
       throw new Error('Complaint not found');
     }
 
-    const isEscalated = ['Escalated to Manager', 'Escalated to Warehouse Head', 'Escalated'].includes(complaint.status);
-
-    // 4. Rule: Manager selectable only after escalation
-    if (senderRole === 'Sales Executive' && recipient.role === 'Warehouse Manager' && !isEscalated) {
-      throw new Error('Warehouse Manager becomes selectable only after complaint escalation');
-    }
-
-    // 5. Rule: Recipient must belong to assigned warehouse
-    if (senderRole === 'Sales Executive' && recipient.warehouse_id !== complaint.warehouse_id) {
-      throw new Error(`Recipient does not belong to the warehouse handling this complaint`);
+    // Validate permission matrix
+    if (senderRole === 'Sales Executive') {
+      if (recipient.role !== 'Warehouse Team' && recipient.role !== 'Warehouse Manager') {
+        throw new Error('Sales Executive can only message Warehouse Team or Warehouse Manager');
+      }
+      if (recipient.warehouse_id !== complaint.warehouse_id) {
+        throw new Error('Recipient does not belong to the warehouse handling this complaint');
+      }
+    } else if (senderRole === 'Warehouse Team') {
+      const isSalesExec = recipient.role === 'Sales Executive' && recipient.id === complaint.sales_executive_id;
+      const isMyManager = recipient.role === 'Warehouse Manager' && recipient.warehouse_id === complaint.warehouse_id;
+      if (!isSalesExec && !isMyManager) {
+        throw new Error('Warehouse Team can only message the Sales Executive who raised the complaint or the Warehouse Manager');
+      }
+    } else if (senderRole === 'Warehouse Manager') {
+      const isSalesExec = recipient.role === 'Sales Executive' && recipient.id === complaint.sales_executive_id;
+      const isMyTeam = recipient.role === 'Warehouse Team' && recipient.warehouse_id === complaint.warehouse_id;
+      if (!isSalesExec && !isMyTeam) {
+        throw new Error('Warehouse Manager can only message the Sales Executive who raised the complaint or Warehouse Team members');
+      }
     }
 
     return {

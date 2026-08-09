@@ -236,7 +236,7 @@ const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onT
                         key={n.id}
                         onClick={() => {
                           setNotificationsOpen(false);
-                          if (onNotificationSelect) onNotificationSelect(n.complaint_id);
+                          if (onNotificationSelect) onNotificationSelect(n.complaint_id, n.sender_id);
                         }}
                         style={{
                           padding: '8px 10px',

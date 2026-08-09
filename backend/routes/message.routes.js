@@ -11,12 +11,15 @@ const messageRepo = RepositoryFactory.getMessageRepository();
 // GET /api/messages/unread-count
 router.get('/unread-count', authMiddleware, async (req, res, next) => {
   try {
+    console.log("BACKEND GET UNREAD COUNT - USER ID:", req.user.userId, "ROLE:", req.user.role);
     const count = await messageRepo.getUnreadCount(req.user.userId, req.user.role);
+    console.log("BACKEND GET UNREAD COUNT RESULT:", count);
     res.status(200).json({
       success: true,
       data: { count }
     });
   } catch (err) {
+    console.error("BACKEND GET UNREAD COUNT ERROR:", err);
     next(err);
   }
 });
@@ -25,10 +28,27 @@ router.get('/unread-count', authMiddleware, async (req, res, next) => {
 // Returns recent message notifications for logged in user
 router.get('/notifications', authMiddleware, async (req, res, next) => {
   try {
+    console.log("BACKEND GET NOTIFICATIONS - USER ID:", req.user.userId, "ROLE:", req.user.role);
     const notifications = await messageRepo.getNotificationsForUser(req.user.userId, req.user.role);
+    console.log("BACKEND GET NOTIFICATIONS RESULT COUNT:", notifications.length);
     res.status(200).json({
       success: true,
       data: { notifications }
+    });
+  } catch (err) {
+    console.error("BACKEND GET NOTIFICATIONS ERROR:", err);
+    next(err);
+  }
+});
+
+// GET /api/messages/contacts
+// Returns authorized contacts for the current user based on their role and warehouse association
+router.get('/contacts', authMiddleware, async (req, res, next) => {
+  try {
+    const contacts = await messageRepo.getContacts(req.user.userId, req.user.role);
+    res.status(200).json({
+      success: true,
+      data: { contacts }
     });
   } catch (err) {
     next(err);
@@ -62,7 +82,7 @@ router.get('/thread/:complaint_id', authMiddleware, async (req, res, next) => {
     const recipientId = req.query.recipient_id ? parseInt(req.query.recipient_id, 10) : null;
 
     // Mark messages directed to this user as read
-    await messageRepo.markAsRead(complaintId, userId, role);
+    await messageRepo.markAsRead(complaintId, userId, role, recipientId);
 
     // Fetch thread list scoped to recipient and user
     const messages = await messageRepo.findByComplaintId(complaintId, userId, role, recipientId);
