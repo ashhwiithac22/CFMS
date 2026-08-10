@@ -311,24 +311,43 @@ const [unreadCount, setUnreadCount] = useState(0);
     if (selectedStatus === 'In Progress' && c.status !== 'In Progress') return false;
     if (selectedStatus === 'Escalated' && !(c.status === 'Escalated' || c.status === 'Escalated to Manager' || c.status === 'Escalated to Warehouse Head' || (c.sla && (c.sla.includes('Expired') || c.sla.includes('!')) && c.status !== 'Resolved' && c.status !== 'Completed'))) return false;
     if (selectedStatus === 'Completed' && !(c.status === 'Completed' || c.status === 'Resolved')) return false;
-    if (selectedDept !== 'All' && c.type !== selectedDept) return false;
+    if (selectedDept && selectedDept !== 'All' && c.type?.trim().toLowerCase() !== selectedDept?.trim().toLowerCase()) return false;
     if (selectedPriority !== 'All' && c.priority !== selectedPriority) return false;
-    if (searchQuery.trim()) {
+    if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
-        c.id.toLowerCase().includes(q) ||
-        c.customer.toLowerCase().includes(q) ||
-        c.invoice.toLowerCase().includes(q) ||
-        c.subtype.toLowerCase().includes(q) ||
-        c.raisedBy.toLowerCase().includes(q)
+        (c.id && c.id.toLowerCase().includes(q)) ||
+        (c.customer && c.customer.toLowerCase().includes(q)) ||
+        (c.invoice && c.invoice.toLowerCase().includes(q)) ||
+        (c.type && c.type.toLowerCase().includes(q)) ||
+        (c.subtype && c.subtype.toLowerCase().includes(q)) ||
+        (c.raisedBy && c.raisedBy.toLowerCase().includes(q))
       );
     }
     return true;
   });
 
-  // Sort is enforced by backend ORDER BY — no client-side re-sort needed.
-  // The complaints array is already in the correct order from the API.
-  const sortedComplaints = filteredComplaints;
+  // Sort the filtered complaints dynamically based on selected sortBy option
+  const sortedComplaints = [...filteredComplaints].sort((a, b) => {
+    if (sortBy === 'ID' || sortBy === 'Complaint ID') {
+      const numA = parseInt((a.id || '').replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt((b.id || '').replace(/\D/g, ''), 10) || 0;
+      return numA !== numB ? numA - numB : (a.id || '').localeCompare(b.id || '');
+    }
+    if (sortBy === 'Priority') {
+      const priorityOrder = { 'Critical': 1, 'High': 2, 'Medium': 3, 'Low': 4, 'Completed': 5 };
+      const rankA = priorityOrder[a.priority] || 4;
+      const rankB = priorityOrder[b.priority] || 4;
+      return rankA - rankB;
+    }
+    if (sortBy === 'Category') {
+      return (a.type || '').localeCompare(b.type || '');
+    }
+    // Default: 'Raised Date' (newest first)
+    const dateA = new Date(a.raised_at || a.date || 0).getTime();
+    const dateB = new Date(b.raised_at || b.date || 0).getTime();
+    return dateB - dateA;
+  });
 
   // KPI count statistics calculated dynamically from current scoped complaint records
   const totalCount = (user?.role === 'Warehouse Manager' && stats) ? stats.totalCount : displayComplaints.length;

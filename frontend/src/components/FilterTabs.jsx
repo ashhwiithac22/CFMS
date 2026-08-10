@@ -10,6 +10,20 @@ const FilterTabs = ({
   setSelectedDept, 
   categories = []
 }) => {
+  const defaultCategoryNames = [
+    'Shortage',
+    'Excess',
+    'Mismatch',
+    'Transport Related',
+    'Quality Issues',
+    'Design Change',
+    'Packaging',
+    'Length Issues'
+  ];
+
+  const fetchedCategoryNames = (categories || []).map(cat => typeof cat === 'string' ? cat : cat.name).filter(Boolean);
+  const combinedCategoryNames = Array.from(new Set([...defaultCategoryNames, ...fetchedCategoryNames]));
+
   return (
     <section 
       style={{ 
@@ -46,7 +60,8 @@ const FilterTabs = ({
           options={[
             { value: 'Raised Date', label: 'Raised Date' },
             { value: 'ID', label: 'Complaint ID' },
-            { value: 'Priority', label: 'Priority' }
+            { value: 'Priority', label: 'Priority' },
+            { value: 'Category', label: 'Category' }
           ]}
         />
 
@@ -59,7 +74,7 @@ const FilterTabs = ({
           style={{ minWidth: '180px' }}
           options={[
             { value: 'All', label: 'All' },
-            ...categories.map(cat => ({ value: cat.name, label: cat.name }))
+            ...combinedCategoryNames.map(name => ({ value: name, label: name }))
           ]}
         />
 
