@@ -38,7 +38,11 @@ const DashboardHeader = ({ searchQuery, setSearchQuery, onRaiseComplaint }) => {
             lineHeight: 1.5
           }}
         >
-          {isSalesExec ? 'Sales Executive Portal — Real-time Complaint Tracking & Escalation' : 'Tirupur Warehouse — Real-time SLA Tracking & Complaint Management'}
+          {user?.role === 'Sales Executive'
+            ? 'Sales Executive Portal — Real-time Complaint Tracking & Escalation'
+            : user?.role === 'Administrator'
+            ? 'Administrator Portal — Real-time Complaint Tracking & Escalation'
+            : `${user?.warehouseName || 'Tirupur Warehouse'} — Real-time SLA Tracking & Complaint Management`}
         </p>
       </div>
 

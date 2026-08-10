@@ -426,7 +426,7 @@ const ComplaintsTable = ({
         }}
       >
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
-          Showing {Math.min(complaints.length, (currentPage - 1) * pageSize + 1)}–{Math.min(complaints.length, currentPage * pageSize)} of {complaints.length} complaints for Tirupur Warehouse
+          Showing {Math.min(complaints.length, (currentPage - 1) * pageSize + 1)}–{Math.min(complaints.length, currentPage * pageSize)} of {complaints.length} complaints{(user?.role === 'Warehouse Team' || user?.role === 'Warehouse Manager') && user?.warehouseName ? ` for ${user.warehouseName}` : ''}
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px', fontWeight: 'bold' }}>

@@ -138,13 +138,18 @@ const Navbar = ({ profileDropdownOpen, setProfileDropdownOpen, handleLogout, onT
           <span style={{ fontSize: '14px', color: '#FFFFFF', fontWeight: 'normal' }}>{getUserRole()}</span>
         </div>
 
-        {/* Dot separator */}
-        <span style={{ fontSize: '14px', color: '#FFFFFF', opacity: 0.8 }}>·</span>
+        {/* Dot separator & Location text (only for warehouse roles) */}
+        {(getUserRole() === 'Warehouse Team' || getUserRole() === 'Warehouse Manager') && (
+          <>
+            {/* Dot separator */}
+            <span style={{ fontSize: '14px', color: '#FFFFFF', opacity: 0.8 }}>·</span>
 
-        {/* Location text */}
-        <span style={{ fontSize: '14px', color: '#FFFFFF', fontWeight: 'normal' }}>
-          {user?.warehouseName || 'Tirupur Warehouse'}
-        </span>
+            {/* Location text */}
+            <span style={{ fontSize: '14px', color: '#FFFFFF', fontWeight: 'normal' }}>
+              {user?.warehouseName || 'Tirupur Warehouse'}
+            </span>
+          </>
+        )}
 
         {/* Navbar Theme Toggle */}
         <ThemeToggle style={{ borderColor: 'rgba(255, 255, 255, 0.3)', color: '#FFFFFF' }} />

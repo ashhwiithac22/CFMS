@@ -25,6 +25,16 @@ const Sidebar = ({ activeTab, setActiveTab, handleLogout, isDesktop, sidebarOpen
     return user?.role || 'Warehouse Team';
   };
 
+  const getUserDetailsText = () => {
+    const role = getUserRole();
+    if (role === 'Warehouse Team' || role === 'Warehouse Manager') {
+      if (user?.warehouseName) {
+        return `${role} • ${user.warehouseName}`;
+      }
+    }
+    return role;
+  };
+
   const renderSidebarContent = () => {
     const isSalesExec = user?.role === 'Sales Executive';
     const isWarehouseTeam = user?.role === 'Warehouse Team';
@@ -164,9 +174,9 @@ const Sidebar = ({ activeTab, setActiveTab, handleLogout, isDesktop, sidebarOpen
             >
               {getInitials()}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.2 }}>
-              <span style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{getUserName()}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{getUserRole()} • Tirupur</span>
+            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.3, flex: 1 }}>
+              <span style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--text-primary)' }} title={getUserName()}>{getUserName()}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }} title={getUserDetailsText()}>{getUserDetailsText()}</span>
             </div>
           </div>
 
