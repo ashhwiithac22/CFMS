@@ -308,7 +308,7 @@ const MessagePanel = ({
                   {m.attachment_url && !failedImages[m.id] && (() => {
                     const fullUrl = m.attachment_url.startsWith('http') 
                       ? m.attachment_url 
-                      : `http://localhost:5000${m.attachment_url}`;
+                      : `http://localhost:4000${m.attachment_url}`;
 
                     return (
                       <div style={{ marginTop: '6px' }}>

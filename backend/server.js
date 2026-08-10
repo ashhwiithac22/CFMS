@@ -9,7 +9,7 @@ const messageRoutes = require('./routes/message.routes');
 const { AppError } = require('./utils/errors');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 const path = require('path');
 
@@ -102,12 +102,15 @@ app.use((err, req, res, next) => {
   });
 });
 
+const { verifySmtp } = require('./config/mailer');
+
 // Database connection & Server startup
 async function startServer() {
   try {
     // Connect to database and run schema/seeds
     try {
       await connectDB();
+      await verifySmtp();
     } catch (dbErr) {
       if (process.env.ALLOW_MOCK_DB === 'true') {
         console.warn('===================================================================');

@@ -8,6 +8,7 @@ const {
   loginRules,
   registerRules,
   forgotPasswordRules,
+  verifyOtpRules,
   resetPasswordRules,
   changePasswordRules
 } = require('../middlewares/validation.middleware');
@@ -23,6 +24,7 @@ router.post('/refresh', authController.refresh);
 
 // Password recovery
 router.post('/forgot-password', authLimiter, forgotPasswordRules, validate, authController.forgotPassword);
+router.post('/verify-otp', authLimiter, verifyOtpRules, validate, authController.verifyOtp);
 router.post('/reset-password', authLimiter, resetPasswordRules, validate, authController.resetPassword);
 
 // Authenticated session features

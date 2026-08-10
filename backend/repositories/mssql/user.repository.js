@@ -80,7 +80,35 @@ class UserRepository {
       .query(`
         SELECT u.*, u.role AS role_name 
         FROM Users u
-        WHERE u.reset_token = @token AND u.reset_token_expiry > GETDATE()
+        WHERE u.reset_token = @token AND u.reset_token_expiry > GETUTCDATE()
+      `);
+    return result.recordset[0] || null;
+  }
+
+  // OTP-specific: store 6-digit OTP with 10-minute expiry
+  async setOtp(email, otp, expiry) {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('email', sql.VarChar, email)
+      .input('otp', sql.VarChar, otp)
+      .input('expiry', sql.DateTime, expiry)
+      .query(`
+        UPDATE Users
+        SET reset_token = @otp, reset_token_expiry = @expiry, updated_at = GETDATE()
+        WHERE email = @email OR username = @email
+      `);
+    return result.rowsAffected[0] > 0;
+  }
+
+  // Find user by OTP or post-verify session token (token must not be expired)
+  async findByOtp(token) {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('token', sql.VarChar, token)
+      .query(`
+        SELECT u.*, u.role AS role_name
+        FROM Users u
+        WHERE u.reset_token = @token AND u.reset_token_expiry > GETUTCDATE()
       `);
     return result.recordset[0] || null;
   }

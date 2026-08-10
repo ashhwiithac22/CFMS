@@ -116,6 +116,15 @@ export const AuthProvider = ({ children }) => {
     return await response.json();
   };
 
+  const verifyOtp = async (email, otp) => {
+    const response = await api.post('/auth/verify-otp', { email, otp });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'OTP verification failed');
+    }
+    return await response.json();
+  };
+
   const resetPassword = async (token, password) => {
     const response = await api.post('/auth/reset-password', { token, password });
     if (!response.ok) {
@@ -145,6 +154,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     register,
     forgotPassword,
+    verifyOtp,
     resetPassword,
     changePassword,
     updateLocalTheme,

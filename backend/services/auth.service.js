@@ -2,12 +2,29 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const RepositoryFactory = require('../repositories/repository.factory');
-const { sendResetMail } = require('../config/mailer');
+const { sendResetMail, sendOtpMail } = require('../config/mailer');
 const { AuthError, ValidationError, NotFoundError } = require('../utils/errors');
 
 const userRepo = RepositoryFactory.getUserRepository();
 const roleRepo = RepositoryFactory.getRoleRepository();
 const auditRepo = RepositoryFactory.getAuditRepository();
+
+// Password complexity validator (returns an error string or null if valid)
+function validatePasswordComplexity(password) {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one digit (0-9).';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter (A-Z).';
+  }
+  if (!/[!@#$%^&*()\-_+=\[\]{};:'"<>,.?/\\|`~]/.test(password)) {
+    return 'Password must contain at least one special character (e.g. !@#$%^&*).';
+  }
+  return null;
+}
 
 class AuthService {
   generateAccessToken(user) {
@@ -165,35 +182,75 @@ class AuthService {
 
   async forgotPassword(email, ipAddress, userAgent) {
     const user = await userRepo.findByEmail(email);
-    
-    // Security: Do not confirm if a user exists or not. Simply return success.
+
+    // Security: Do not reveal whether the email exists
     if (!user) {
-      console.log(`Forgot password requested for non-existent email: ${email}`);
-      return { message: 'If that email exists, a reset link has been sent.' };
+      console.log(`Forgot password OTP requested for non-existent email: ${email}`);
+      return { message: 'If that email is registered, an OTP has been sent.' };
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
+    // Generate a 6-digit numeric OTP
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await userRepo.setResetToken(email, resetToken, resetTokenExpiry);
+    await userRepo.setOtp(email, otp, otpExpiry);
 
-    await sendResetMail(email, resetToken);
+    await sendOtpMail(email, otp);
 
     await auditRepo.create({
       userId: user.id,
-      action: 'PASSWORD_RESET_REQUEST',
+      action: 'PASSWORD_RESET_OTP_SENT',
       ipAddress,
       userAgent,
-      details: 'Password reset link sent via mailer'
+      details: 'Password reset OTP sent via mailer'
     });
 
-    return { message: 'If that email exists, a reset link has been sent.' };
+    return { message: 'If that email is registered, an OTP has been sent.' };
+  }
+
+  async verifyOtp(email, otp, ipAddress, userAgent) {
+    const user = await userRepo.findByEmail(email);
+    if (!user) {
+      throw new ValidationError('Invalid email or OTP.');
+    }
+
+    // Check OTP matches and hasn't expired
+    if (!user.reset_token || user.reset_token !== otp) {
+      throw new ValidationError('Incorrect OTP. Please try again.');
+    }
+
+    if (!user.reset_token_expiry || new Date(user.reset_token_expiry) < new Date()) {
+      throw new ValidationError('OTP has expired. Please request a new one.');
+    }
+
+    // OTP verified — replace with a short-lived session token (30 min) so the
+    // reset-password step can be authenticated without re-verifying OTP.
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+    await userRepo.setOtp(email, sessionToken, sessionExpiry);
+
+    await auditRepo.create({
+      userId: user.id,
+      action: 'PASSWORD_RESET_OTP_VERIFIED',
+      ipAddress,
+      userAgent,
+      details: 'OTP verified, session token issued'
+    });
+
+    return { resetToken: sessionToken };
   }
 
   async resetPassword(token, newPassword, ipAddress, userAgent) {
-    const user = await userRepo.findByResetToken(token);
+    // Validate password complexity server-side
+    const complexityError = validatePasswordComplexity(newPassword);
+    if (complexityError) {
+      throw new ValidationError(complexityError);
+    }
+
+    // Works for both OTP-flow session tokens and legacy link-based tokens
+    const user = await userRepo.findByOtp(token);
     if (!user) {
-      throw new ValidationError('Invalid or expired reset token');
+      throw new ValidationError('Invalid or expired reset token.');
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -204,7 +261,7 @@ class AuthService {
       action: 'PASSWORD_RESET',
       ipAddress,
       userAgent,
-      details: 'Password reset completed'
+      details: 'Password reset completed via OTP flow'
     });
   }
 
@@ -218,6 +275,12 @@ class AuthService {
     const isMatch = await bcrypt.compare(currentPassword, fullUser.password_hash);
     if (!isMatch) {
       throw new ValidationError('Incorrect current password');
+    }
+
+    // Validate new password complexity server-side
+    const complexityError = validatePasswordComplexity(newPassword);
+    if (complexityError) {
+      throw new ValidationError(complexityError);
     }
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);

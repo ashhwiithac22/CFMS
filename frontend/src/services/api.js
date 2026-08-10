@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'http://localhost:4000/api';
 
 let accessToken = '';
 let logoutHandler = null;
@@ -30,7 +30,13 @@ async function apiRequest(endpoint, options = {}) {
   // Ensure cookies (for refresh token) are transmitted in cross-origin requests
   options.credentials = 'include';
   
-  let response = await fetch(url, options);
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (netErr) {
+    console.error(`[API Network Error] Could not reach ${url}:`, netErr.message);
+    throw new Error(`Failed to connect to API server at ${BASE_URL}. Please verify the backend is running on port 4000.`);
+  }
   
   // Automatic refresh token logic on 401 Unauthorized
   if (response.status === 401 && endpoint !== '/auth/login' && endpoint !== '/auth/refresh') {

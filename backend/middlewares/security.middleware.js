@@ -38,16 +38,16 @@ const corsOptions = {
     if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
-    // Allow explicit CLIENT_URL from .env (for production)
+    // Allow explicit CLIENT_URL from .env
     const allowedOrigin = process.env.CLIENT_URL;
     if (allowedOrigin && origin === allowedOrigin) {
       return callback(null, true);
     }
-    callback(new Error(`CORS policy: origin ${origin} is not allowed`));
+    callback(null, false);
   },
   credentials: true, // Allow cookie transmission
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 };
 
 module.exports = {

@@ -118,6 +118,24 @@ class AuthController {
     }
   }
 
+  async verifyOtp(req, res, next) {
+    try {
+      const { email, otp } = req.body;
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'] || 'unknown';
+
+      const result = await authService.verifyOtp(email, otp, ipAddress, userAgent);
+
+      res.status(200).json({
+        success: true,
+        message: 'OTP verified successfully.',
+        data: { resetToken: result.resetToken }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async resetPassword(req, res, next) {
     try {
       const { token, password } = req.body;

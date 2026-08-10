@@ -214,3 +214,34 @@ Below is the SQL Server schema defining the tables and relations:
   - Warehouse Team members can message both Sales Executive and Warehouse Manager.
   - Warehouse Managers can message both Sales Executive and all Warehouse Team members.
 - Configured E2E Playwright test suite verifying the notifications count badges, Notifications page clicking, and thread isolation.
+
+### 2026-08-10
+- **OTP-Based Forgot Password Flow**:
+  - Replaced the link-based forgot-password flow with a 3-step in-component OTP flow in `ForgotPassword.jsx`:
+    - **Step 1**: User enters email → server generates 6-digit numeric OTP → sent via Nodemailer (Ethereal mock in dev). Server logs the Ethereal preview URL.
+    - **Step 2**: User enters 6-digit OTP. Verified against `Users.reset_token` + `Users.reset_token_expiry` (10-minute expiry). Wrong OTP shows clear error. Expired OTP shows "expired" message. Resend OTP button rate-limited to 1 per 60 seconds (client-side countdown).
+    - **Step 3**: After OTP verification, a 30-minute session token is stored in `reset_token`. User sets a new password without entering the old one. Real-time complexity checklist shown.
+  - No new DB columns added — reuses existing `reset_token VARCHAR(255)` + `reset_token_expiry DATETIME`.
+  - New backend endpoint: `POST /api/auth/verify-otp` (validates email + 6-digit OTP, returns short-lived resetToken).
+  - Existing `POST /api/auth/reset-password` now uses `findByOtp()` (works with both OTP session tokens and legacy hex tokens).
+  - Timezone fix: all expiry SQL comparisons use `GETUTCDATE()` (not `GETDATE()`) since Node.js passes DateTime values in UTC.
+  - OTP email template shows 6-digit code prominently with 10-minute expiry notice.
+
+- **New Password Complexity Policy** (applied to Register, Forgot Password reset, Change Password):
+  - At least **8 characters** (was 6)
+  - At least **1 digit** (0–9) — previously enforced
+  - At least **1 uppercase letter** (A–Z) — previously enforced
+  - At least **1 special character** (e.g. `!@#$%^&*`) — **NEW**
+  - Server-side: enforced in `validation.middleware.js` (registerRules, resetPasswordRules, changePasswordRules) and also in `auth.service.js` (`validatePasswordComplexity()` helper).
+  - Client-side: real-time animated checklist in `ForgotPassword.jsx`, `ResetPassword.jsx`, and `ChangePassword.jsx`.
+
+- **Seed User**:
+  - Created `ashwithac22@gmail.com` (role: Administrator, status: Active, id: 38) with seeded password `12345` (intentionally does not meet new complexity policy — dev-only seed credential).
+  - Seed SQL: `backend/database/seed_ashwitha.sql` (safe to re-run).
+
+- **Test User**: `ashwithac22@gmail.com` / `12345` (restored after E2E testing).
+
+- **Change Password** (`POST /api/auth/change-password`): unchanged — still requires `currentPassword`. Now also enforces the 4-rule complexity policy on `newPassword`.
+
+- **Files NOT modified**: Dashboard.jsx, all role-based dashboard logic, SLA countdown, complaint repositories, messaging, notifications, sidebar — zero changes to existing working features.
+

@@ -4,6 +4,32 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Lock, Eye, EyeOff, CheckCircle, Sun, Moon } from 'lucide-react';
 
+// Password complexity rules — must match backend policy
+const COMPLEXITY_RULES = [
+  { id: 'length',    label: 'At least 8 characters',          test: (p) => p.length >= 8 },
+  { id: 'digit',     label: 'At least one digit (0–9)',        test: (p) => /[0-9]/.test(p) },
+  { id: 'uppercase', label: 'At least one uppercase letter',   test: (p) => /[A-Z]/.test(p) },
+  { id: 'special',   label: 'At least one special character',  test: (p) => /[!@#$%^&*()\-_+=[\]{};:'"<>,.?/\\|`~]/.test(p) },
+];
+
+function PasswordChecklist({ password }) {
+  return (
+    <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      {COMPLEXITY_RULES.map((rule) => {
+        const met = password.length > 0 && rule.test(password);
+        return (
+          <li key={rule.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: met ? '#22c55e' : 'var(--text-secondary)', transition: 'color 200ms ease' }}>
+            <span style={{ width: '14px', height: '14px', borderRadius: '50%', border: `2px solid ${met ? '#22c55e' : 'var(--border-card)'}`, background: met ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ease' }}>
+              {met && <span style={{ width: '6px', height: '6px', background: 'white', borderRadius: '50%' }} />}
+            </span>
+            {rule.label}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 const ResetPassword = () => {
   const { resetPassword } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -117,7 +143,7 @@ const ResetPassword = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="New password (min 6 chars)"
+                  placeholder="New password (min 8 chars)"
                   className="glass-input"
                   style={{ paddingLeft: '44px', paddingRight: '44px' }}
                 />
@@ -128,6 +154,8 @@ const ResetPassword = () => {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </span>
               </div>
+              {/* Real-time password complexity feedback */}
+              <PasswordChecklist password={password} />
             </div>
 
             <div>

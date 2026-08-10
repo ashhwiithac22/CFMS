@@ -13,6 +13,15 @@ const validate = (req, res, next) => {
   next();
 };
 
+// Shared password complexity chain (used in register, reset-password, change-password)
+const passwordComplexityRules = (fieldName = 'password') => [
+  body(fieldName)
+    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters long')
+    .matches(/\d/).withMessage('Password must contain at least one digit (0-9)')
+    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter (A-Z)')
+    .matches(/[!@#$%^&*()\-_+=\[\]{};:'"<>,.?/\\|`~]/).withMessage('Password must contain at least one special character (e.g. !@#$%^&*)')
+];
+
 const loginRules = [
   body('email')
     .trim()
@@ -28,9 +37,10 @@ const registerRules = [
     .isEmail().withMessage('Please provide a valid email address')
     .normalizeEmail(),
   body('password')
-    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
-    .matches(/\d/).withMessage('Password must contain at least one number')
-    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter'),
+    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters long')
+    .matches(/\d/).withMessage('Password must contain at least one digit (0-9)')
+    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter (A-Z)')
+    .matches(/[!@#$%^&*()\-_+=\[\]{};:'"<>,.?/\\|`~]/).withMessage('Password must contain at least one special character (e.g. !@#$%^&*)'),
   body('firstName')
     .trim()
     .notEmpty().withMessage('First name is required')
@@ -53,23 +63,35 @@ const forgotPasswordRules = [
     .normalizeEmail()
 ];
 
+const verifyOtpRules = [
+  body('email')
+    .trim()
+    .isEmail().withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  body('otp')
+    .trim()
+    .matches(/^\d{6}$/).withMessage('OTP must be a 6-digit numeric code')
+];
+
 const resetPasswordRules = [
   body('token')
     .trim()
     .notEmpty().withMessage('Reset token is required'),
   body('password')
-    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
-    .matches(/\d/).withMessage('Password must contain at least one number')
-    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
+    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters long')
+    .matches(/\d/).withMessage('Password must contain at least one digit (0-9)')
+    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter (A-Z)')
+    .matches(/[!@#$%^&*()\-_+=\[\]{};:'"<>,.?/\\|`~]/).withMessage('Password must contain at least one special character (e.g. !@#$%^&*)')
 ];
 
 const changePasswordRules = [
   body('currentPassword')
     .notEmpty().withMessage('Current password is required'),
   body('newPassword')
-    .isLength({ min: 6 }).withMessage('New password must be at least 6 characters long')
-    .matches(/\d/).withMessage('Password must contain at least one number')
-    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
+    .isLength({ min: 8 }).withMessage('New password must be at least 8 characters long')
+    .matches(/\d/).withMessage('Password must contain at least one digit (0-9)')
+    .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter (A-Z)')
+    .matches(/[!@#$%^&*()\-_+=\[\]{};:'"<>,.?/\\|`~]/).withMessage('Password must contain at least one special character (e.g. !@#$%^&*)')
     .custom((value, { req }) => {
       if (value === req.body.currentPassword) {
         throw new Error('New password cannot be the same as current password');
@@ -83,6 +105,7 @@ module.exports = {
   loginRules,
   registerRules,
   forgotPasswordRules,
+  verifyOtpRules,
   resetPasswordRules,
   changePasswordRules
 };
