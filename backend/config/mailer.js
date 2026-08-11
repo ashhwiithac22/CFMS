@@ -155,9 +155,116 @@ async function sendOtpMail(email, otp) {
   }
 }
 
+async function sendEscalationEmail(details) {
+  try {
+    const client = await getTransporter();
+    const service = process.env.EMAIL_SERVICE || (process.env.EMAIL_USER && process.env.EMAIL_USER.endsWith('@gmail.com') ? 'Gmail' : 'SMTP');
+    const fromAddress = process.env.EMAIL_FROM || `"Customer Feedback Support" <${process.env.EMAIL_USER}>`;
+
+    const { email, managerName, complaintNumber, salesExecutiveName, customerCode, invoiceNumber, complaintType, complaintSubtype } = details;
+    const typeDisplay = complaintSubtype ? `${complaintType} (${complaintSubtype})` : complaintType;
+
+    const recipients = Array.isArray(email) ? email.filter(e => e && e.includes('@')) : [email];
+    const anonymizedLog = recipients.map(anonymizeEmail).join(', ');
+
+    if (recipients.length === 0) {
+      console.warn(`[MAIL WARN] sendEscalationEmail skipped for ${complaintNumber}: No valid recipient emails.`);
+      return { success: false, message: 'No recipients' };
+    }
+
+    const mailOptions = {
+      from: fromAddress,
+      to: recipients,
+      subject: `Complaint Escalated - ${complaintNumber}`,
+      text: `Hello ${managerName || 'Warehouse Manager'},\n\nA complaint has been escalated and requires your attention.\n\nComplaint Number: ${complaintNumber}\nSales Executive: ${salesExecutiveName || 'N/A'}\nCustomer Code: ${customerCode}\nInvoice Number: ${invoiceNumber}\nComplaint Type: ${typeDisplay}\nStatus: Escalated to Manager\n\nPlease log in to your dashboard to review and take action.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+          <h2 style="color: #dc2626;">Complaint Escalated - Attention Required</h2>
+          <p>Hello ${managerName || 'Warehouse Manager'},</p>
+          <p>The following complaint has been escalated and requires your urgent review:</p>
+          <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 4px 0;"><strong>Complaint Number:</strong> ${complaintNumber}</p>
+            <p style="margin: 4px 0;"><strong>Raised By (Sales Exec):</strong> ${salesExecutiveName || 'N/A'}</p>
+            <p style="margin: 4px 0;"><strong>Customer Code:</strong> ${customerCode}</p>
+            <p style="margin: 4px 0;"><strong>Invoice Number:</strong> ${invoiceNumber}</p>
+            <p style="margin: 4px 0;"><strong>Complaint Type:</strong> ${typeDisplay}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> <span style="color: #dc2626; font-weight: bold;">Escalated to Manager</span></p>
+          </div>
+          <p>Please log in to your Customer Feedback Management System dashboard to review details and take action.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 12px; color: #777;">This is an automated notification from the Customer Feedback Management System.</p>
+        </div>
+      `,
+    };
+
+    console.log(`Escalation email requested for Manager(s): ${anonymizedLog} (Complaint: ${complaintNumber})`);
+    console.log(`SMTP provider: ${service}`);
+    const info = await client.sendMail(mailOptions);
+    console.log('SMTP send status: SUCCESS');
+    console.log('Message ID:', info.messageId);
+
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error('SMTP send status: FAILED');
+    console.error('Error occurred in sendEscalationEmail:', err.message);
+    throw err;
+  }
+}
+
+async function sendResolutionEmail(details) {
+  try {
+    const client = await getTransporter();
+    const service = process.env.EMAIL_SERVICE || (process.env.EMAIL_USER && process.env.EMAIL_USER.endsWith('@gmail.com') ? 'Gmail' : 'SMTP');
+    const fromAddress = process.env.EMAIL_FROM || `"Customer Feedback Support" <${process.env.EMAIL_USER}>`;
+
+    const { email, salesExecutiveName, complaintNumber, customerCode, invoiceNumber, warehouseName, complaintType, complaintSubtype } = details;
+    const typeDisplay = complaintSubtype ? `${complaintType} (${complaintSubtype})` : complaintType;
+
+    const mailOptions = {
+      from: fromAddress,
+      to: email,
+      subject: `Your Complaint Has Been Resolved - ${complaintNumber}`,
+      text: `Hello ${salesExecutiveName || 'Sales Executive'},\n\nYour complaint has been resolved.\n\nComplaint Number: ${complaintNumber}\nCustomer Code: ${customerCode}\nInvoice Number: ${invoiceNumber}\nWarehouse: ${warehouseName}\nComplaint Type: ${typeDisplay}\nStatus: Resolved / Completed\n\nThank you for using the Customer Feedback Management System.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+          <h2 style="color: #16a34a;">Your Complaint Has Been Resolved</h2>
+          <p>Hello ${salesExecutiveName || 'Sales Executive'},</p>
+          <p>Your complaint has been marked as resolved:</p>
+          <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 4px 0;"><strong>Complaint Number:</strong> ${complaintNumber}</p>
+            <p style="margin: 4px 0;"><strong>Customer Code:</strong> ${customerCode}</p>
+            <p style="margin: 4px 0;"><strong>Invoice Number:</strong> ${invoiceNumber}</p>
+            <p style="margin: 4px 0;"><strong>Warehouse:</strong> ${warehouseName}</p>
+            <p style="margin: 4px 0;"><strong>Complaint Type:</strong> ${typeDisplay}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> <span style="color: #16a34a; font-weight: bold;">Resolved</span></p>
+          </div>
+          <p>You can view the full details in your Customer Feedback Management System dashboard.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 12px; color: #777;">This is an automated notification from the Customer Feedback Management System.</p>
+        </div>
+      `,
+    };
+
+    console.log(`Resolution email requested for Sales Executive: ${anonymizeEmail(email)} (Complaint: ${complaintNumber})`);
+    console.log(`SMTP provider: ${service}`);
+    const info = await client.sendMail(mailOptions);
+    console.log('SMTP send status: SUCCESS');
+    console.log('Message ID:', info.messageId);
+
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error('SMTP send status: FAILED');
+    console.error('Error occurred in sendResolutionEmail:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   verifySmtp,
   sendResetMail,
-  sendOtpMail
+  sendOtpMail,
+  sendEscalationEmail,
+  sendResolutionEmail
 };
+
 

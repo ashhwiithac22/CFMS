@@ -245,3 +245,26 @@ Below is the SQL Server schema defining the tables and relations:
 
 - **Files NOT modified**: Dashboard.jsx, all role-based dashboard logic, SLA countdown, complaint repositories, messaging, notifications, sidebar — zero changes to existing working features.
 
+### 2026-08-11
+- **Automated Email Notifications on Escalation and Resolution**:
+  - Implemented automated Nodemailer email notifications reusing the existing SMTP configuration in `backend/config/mailer.js`:
+    - `sendEscalationEmail(details)`: Dispatched to the active Warehouse Manager assigned to the complaint's warehouse whenever a complaint is escalated (manual or automatic SLA expiry). Includes Sales Executive name, Customer Code, Invoice Number, Complaint Type/Subtype, and escalation alert.
+    - `sendResolutionEmail(details)`: Dispatched to the Sales Executive who originally raised the complaint whenever a complaint is marked as `'Resolved'` / `'Completed'` (by Warehouse Team or Warehouse Manager). Includes Customer Code, Invoice Number, Warehouse Name, Complaint Type/Subtype, and resolution notice.
+  - **Background SLA Monitoring Service (`backend/services/slaMonitor.service.js`)**:
+    - Created an independent background `setInterval()` SLA scheduler running every 60 seconds (initialized on server start in `server.js`). It automatically checks SQL Server for complaints where `status IN ('Assigned', 'New', 'In Progress') AND GETDATE() > warehouse_team_deadline`.
+    - Operates completely independently of HTTP requests and dashboard reloads.
+  - **Non-Blocking Architecture**:
+    - Email dispatches are wrapped in non-blocking `setImmediate` async execution with `try/catch` safety blocks. Slow mail servers or SMTP connection errors will never fail the database status update API response or crash the server.
+  - **Duplicate Email Prevention**:
+    - The SQL query updates status to `'Escalated to Manager'` immediately upon detection. Once updated, the complaint no longer matches `status IN ('Assigned', 'New', 'In Progress')`, guaranteeing zero duplicate emails on subsequent checks.
+  - **Resolution Email Recipient Mapping (`Complaints.sales_executive_id = Users.id`)**:
+    - Verified that `triggerResolutionEmail` retrieves the recipient strictly by joining `Complaints.sales_executive_id` to `Users.id`. The logged-in user who completes the complaint (e.g. Warehouse Team member or Manager) has zero influence on the resolution recipient. Explicit logging of `sales_executive_id` and recipient email added to backend server logs.
+  - **Warehouse Manager Table UI Alignment (`ComplaintsTable.jsx`)**:
+    - Expanded Status column width from `145px` to `195px` and table minimum width to `1080px`, guaranteeing that badges such as `"Escalated to Manager"` display completely without overlapping adjacent columns.
+    - Center-aligned Status and Actions headers and body cells (`textAlign: 'center'`), centering buttons (`Take Action`, `Complete`, `Message`) with even `8px` spacing.
+  - **Files Modified / Created**: `backend/config/mailer.js`, `backend/repositories/mssql/complaint.repository.js`, `backend/services/slaMonitor.service.js`, `backend/server.js`, `frontend/src/components/ComplaintsTable.jsx`, `PROJECT_STATE.md`.
+
+
+
+
+

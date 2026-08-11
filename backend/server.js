@@ -103,6 +103,7 @@ app.use((err, req, res, next) => {
 });
 
 const { verifySmtp } = require('./config/mailer');
+const { startSlaMonitor } = require('./services/slaMonitor.service');
 
 // Database connection & Server startup
 async function startServer() {
@@ -111,6 +112,7 @@ async function startServer() {
     try {
       await connectDB();
       await verifySmtp();
+      startSlaMonitor();
     } catch (dbErr) {
       if (process.env.ALLOW_MOCK_DB === 'true') {
         console.warn('===================================================================');
@@ -138,3 +140,4 @@ async function startServer() {
 }
 
 startServer();
+

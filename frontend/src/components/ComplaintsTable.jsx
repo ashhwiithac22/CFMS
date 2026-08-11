@@ -277,7 +277,7 @@ const ComplaintsTable = ({
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px', boxSizing: 'border-box' }}>
       <div style={{ width: '100%', overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', backgroundColor: 'var(--bg-primary)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1020px', tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1080px', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '14px 10px', width: '95px', minWidth: '95px', boxSizing: 'border-box', textAlign: 'left' }}>Complaint ID</th>
@@ -287,11 +287,11 @@ const ComplaintsTable = ({
               <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Raised By</th>
               <th style={{ padding: '14px 10px', width: '110px', minWidth: '110px', boxSizing: 'border-box', textAlign: 'left' }}>Warehouse</th>
               <th style={{ padding: '14px 10px', width: '80px', minWidth: '80px', boxSizing: 'border-box', textAlign: 'left' }}>SLA Timer</th>
-              <th style={{ padding: '14px 10px', width: '145px', minWidth: '145px', boxSizing: 'border-box', textAlign: 'left' }}>Status</th>
+              <th style={{ padding: '14px 10px', width: '195px', minWidth: '195px', boxSizing: 'border-box', textAlign: 'center' }}>Status</th>
               {isSalesExec && (
                 <th style={{ padding: '14px 6px', width: '55px', minWidth: '55px', boxSizing: 'border-box', textAlign: 'center' }}>Attach</th>
               )}
-              <th style={{ padding: '14px 10px', width: isSalesExec ? '100px' : '220px', minWidth: isSalesExec ? '100px' : '220px', boxSizing: 'border-box', textAlign: 'right' }}>Actions</th>
+              <th style={{ padding: '14px 10px', width: isSalesExec ? '100px' : '230px', minWidth: isSalesExec ? '100px' : '230px', boxSizing: 'border-box', textAlign: 'center' }}>Actions</th>
             </tr>
           </thead>
           {loading ? (
@@ -380,8 +380,10 @@ const ComplaintsTable = ({
                       </div>
                     </td>
 
-                    <td style={{ padding: '12px 10px', width: '145px', minWidth: '145px', boxSizing: 'border-box', textAlign: 'left' }}>
-                      {renderStatusBadge(comp)}
+                    <td style={{ padding: '12px 10px', width: '195px', minWidth: '195px', boxSizing: 'border-box', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        {renderStatusBadge(comp)}
+                      </div>
                     </td>
 
                     {isSalesExec && (
@@ -400,8 +402,8 @@ const ComplaintsTable = ({
                       </td>
                     )}
 
-                    <td style={{ padding: '12px 10px', width: isSalesExec ? '100px' : '220px', minWidth: isSalesExec ? '100px' : '220px', boxSizing: 'border-box', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <td style={{ padding: '12px 10px', width: isSalesExec ? '100px' : '230px', minWidth: isSalesExec ? '100px' : '230px', boxSizing: 'border-box', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
                         {renderActions(comp)}
                       </div>
                     </td>

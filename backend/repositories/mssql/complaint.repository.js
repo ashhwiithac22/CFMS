@@ -1,4 +1,57 @@
 const { getPool, sql } = require('../../config/db');
+const mailer = require('../../config/mailer');
+
+function triggerEscalationEmail(complaintId) {
+  setImmediate(async () => {
+    try {
+      const repo = new ComplaintRepository();
+      const details = await repo.getNotificationDetails(complaintId);
+      const recipients = details?.managerEmails?.length > 0 ? details.managerEmails : (details?.managerEmail ? [details.managerEmail] : []);
+      if (details && recipients.length > 0) {
+        await mailer.sendEscalationEmail({
+          email: recipients,
+          managerName: details.managerName,
+          complaintNumber: details.complaintNumber,
+          salesExecutiveName: details.salesExecutiveName,
+          customerCode: details.customerCode,
+          invoiceNumber: details.invoiceNumber,
+          complaintType: details.complaintType,
+          complaintSubtype: details.complaintSubtype
+        });
+      } else {
+        console.warn(`[MAIL WARN] Escalation email skipped for complaint ID ${complaintId}: No active Warehouse Manager found for warehouse ID ${details?.warehouseId || 'unknown'}.`);
+      }
+    } catch (err) {
+      console.error(`[MAIL ERROR] Failed sending escalation email for complaint ID ${complaintId}:`, err.message);
+    }
+  });
+}
+
+function triggerResolutionEmail(complaintId) {
+  setImmediate(async () => {
+    try {
+      const repo = new ComplaintRepository();
+      const details = await repo.getNotificationDetails(complaintId);
+      if (details && details.salesExecutiveEmail) {
+        console.log(`[RESOLUTION MAIL] Complaint ${details.complaintNumber} (ID: ${complaintId}) resolved. Original Sales Executive ID: ${details.salesExecutiveId} (${details.salesExecutiveName}). Sending resolution email to: ${details.salesExecutiveEmail}`);
+        await mailer.sendResolutionEmail({
+          email: details.salesExecutiveEmail,
+          salesExecutiveName: details.salesExecutiveName,
+          complaintNumber: details.complaintNumber,
+          customerCode: details.customerCode,
+          invoiceNumber: details.invoiceNumber,
+          warehouseName: details.warehouseName,
+          complaintType: details.complaintType,
+          complaintSubtype: details.complaintSubtype
+        });
+      } else {
+        console.warn(`[MAIL WARN] Resolution email skipped for complaint ID ${complaintId}: Sales Executive email not found for sales_executive_id ${details?.salesExecutiveId || 'unknown'}.`);
+      }
+    } catch (err) {
+      console.error(`[MAIL ERROR] Failed sending resolution email for complaint ID ${complaintId}:`, err.message);
+    }
+  });
+}
 
 class ComplaintRepository {
   async getFormMetadata() {
@@ -80,10 +133,8 @@ class ComplaintRepository {
     };
   }
 
-  async findAll(userRole, userId, warehouseId, sortBy = 'date', history = false) {
+  async checkAndAutoEscalate() {
     const pool = getPool();
-
-    // 1. Automatic Escalation Check for expired SLAs past 24 hours
     const expiredRes = await pool.request().query(`
       SELECT id, complaint_number, warehouse_id 
       FROM Complaints 
@@ -91,28 +142,43 @@ class ComplaintRepository {
         AND GETDATE() > warehouse_team_deadline
     `);
 
-    if (expiredRes.recordset.length > 0) {
-      for (const comp of expiredRes.recordset) {
-        await pool.request()
-          .input('id', comp.id)
-          .query(`
-            UPDATE Complaints 
-            SET status = 'Escalated to Manager',
-                escalated_to_manager_at = ISNULL(escalated_to_manager_at, GETDATE()),
-                updated_at = GETDATE()
-            WHERE id = @id
-          `);
-
-        await pool.request()
-          .input('complaint_id', comp.id)
-          .input('action', 'Automatic Escalation')
-          .input('notes', 'Auto-escalated to Warehouse Manager due to 24h SLA expiry')
-          .query(`
-            INSERT INTO ComplaintHistory (complaint_id, action, notes)
-            VALUES (@complaint_id, @action, @notes)
-          `);
-      }
+    if (expiredRes.recordset.length === 0) {
+      return 0;
     }
+
+    for (const comp of expiredRes.recordset) {
+      await pool.request()
+        .input('id', comp.id)
+        .query(`
+          UPDATE Complaints 
+          SET status = 'Escalated to Manager',
+              escalated_to_manager_at = ISNULL(escalated_to_manager_at, GETDATE()),
+              updated_at = GETDATE()
+          WHERE id = @id
+        `);
+
+      await pool.request()
+        .input('complaint_id', comp.id)
+        .input('action', 'Automatic Escalation')
+        .input('notes', 'Auto-escalated to Warehouse Manager due to 24h SLA expiry')
+        .query(`
+          INSERT INTO ComplaintHistory (complaint_id, action, notes)
+          VALUES (@complaint_id, @action, @notes)
+        `);
+
+      // Trigger automated escalation email to Warehouse Manager
+      triggerEscalationEmail(comp.id);
+    }
+
+    return expiredRes.recordset.length;
+  }
+
+  async findAll(userRole, userId, warehouseId, sortBy = 'date', history = false) {
+    const pool = getPool();
+
+    // 1. Automatic Escalation Check for expired SLAs past 24 hours
+    await this.checkAndAutoEscalate();
+
 
     let whereClause = 'WHERE 1=1';
 
@@ -285,6 +351,13 @@ class ComplaintRepository {
         VALUES (@complaint_id, @action, @performed_by, @notes)
       `);
 
+    // 4. Trigger automated email notifications (non-blocking)
+    if (newStatus === 'Escalated to Manager') {
+      triggerEscalationEmail(comp.id);
+    } else if (newStatus === 'Resolved') {
+      triggerResolutionEmail(comp.id);
+    }
+
     return { id: comp.complaint_number, status: newStatus };
   }
 
@@ -431,6 +504,72 @@ class ComplaintRepository {
       sales_executive_id: row.sales_executive_id,
       warehouse_id: row.warehouse_id
     };
+  }
+
+  async getNotificationDetails(complaintId) {
+    try {
+      const pool = getPool();
+      const res = await pool.request()
+        .input('id', sql.VarChar, String(complaintId))
+        .query(`
+          SELECT 
+            c.id,
+            c.complaint_number,
+            c.customer_code,
+            c.invoice_number,
+            c.warehouse_id,
+            c.sales_executive_id,
+            w.name AS warehouse_name,
+            ct.name AS complaint_type,
+            cs.name AS complaint_subtype,
+            (u_sales.first_name + ' ' + u_sales.last_name) AS sales_executive_name,
+            u_sales.email AS sales_executive_email
+          FROM Complaints c
+          JOIN Warehouses w ON c.warehouse_id = w.id
+          JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
+          LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
+          JOIN Users u_sales ON c.sales_executive_id = u_sales.id
+          WHERE c.complaint_number = @id OR CAST(c.id AS VARCHAR) = @id
+        `);
+
+      if (res.recordset.length === 0) return null;
+      const row = res.recordset[0];
+
+      // Query ALL active Warehouse Managers for this complaint's warehouse_id
+      const managersRes = await pool.request()
+        .input('warehouse_id', sql.Int, row.warehouse_id)
+        .query(`
+          SELECT email, (first_name + ' ' + last_name) AS manager_name
+          FROM Users
+          WHERE role = 'Warehouse Manager' 
+            AND warehouse_id = @warehouse_id 
+            AND status = 'Active'
+          ORDER BY id DESC
+        `);
+
+      const managerEmails = managersRes.recordset.map(m => m.email).filter(Boolean);
+      const managerNames = managersRes.recordset.map(m => m.manager_name).filter(Boolean).join(', ');
+
+      return {
+        id: row.id,
+        complaintNumber: row.complaint_number,
+        customerCode: row.customer_code,
+        invoiceNumber: row.invoice_number,
+        warehouseId: row.warehouse_id,
+        warehouseName: row.warehouse_name,
+        salesExecutiveId: row.sales_executive_id,
+        salesExecutiveName: row.sales_executive_name,
+        salesExecutiveEmail: row.sales_executive_email,
+        managerEmails: managerEmails,
+        managerEmail: managerEmails[0] || null,
+        managerName: managerNames || 'Warehouse Manager',
+        complaintType: row.complaint_type,
+        complaintSubtype: row.complaint_subtype
+      };
+    } catch (err) {
+      console.error('[MAIL ERROR] Failed to fetch complaint notification details:', err.message);
+      return null;
+    }
   }
 }
 
