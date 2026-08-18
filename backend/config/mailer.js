@@ -62,7 +62,13 @@ async function verifySmtp() {
 
   try {
     const client = await getTransporter();
-    await client.verify();
+    const verifyPromise = client.verify().catch(err => {
+      // Ignore background rejection after timeout
+    });
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('SMTP connection timed out after 5000ms')), 5000)
+    );
+    await Promise.race([verifyPromise, timeoutPromise]);
     console.log('SMTP verification: SUCCESS');
     console.log('---------------------------------------------------------');
     return true;

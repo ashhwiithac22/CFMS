@@ -36,11 +36,13 @@ app.use('/api/', (req, res, next) => {
 });
 
 const complaintRoutes = require('./routes/complaint.routes');
+const reportRoutes = require('./routes/report.routes');
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/complaints', complaintRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check & root endpoints
 app.get('/', (req, res) => {
@@ -111,8 +113,6 @@ async function startServer() {
     // Connect to database and run schema/seeds
     try {
       await connectDB();
-      await verifySmtp();
-      startSlaMonitor();
     } catch (dbErr) {
       if (process.env.ALLOW_MOCK_DB === 'true') {
         console.warn('===================================================================');
@@ -130,9 +130,14 @@ async function startServer() {
       }
     }
 
-    app.listen(PORT, () => {
+    // Bind HTTP server to PORT & 0.0.0.0 so both localhost and 127.0.0.1 IPv4/IPv6 connections succeed
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`Backend server is running on http://localhost:${PORT}`);
     });
+
+    // Run non-blocking SMTP verification and background SLA monitor
+    verifySmtp().catch(err => console.warn('[SMTP WARN] Non-blocking SMTP verify notice:', err.message));
+    startSlaMonitor();
   } catch (err) {
     console.error('Critical Error: Failed to start backend server.', err.message);
     process.exit(1);

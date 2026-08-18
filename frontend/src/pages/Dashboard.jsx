@@ -12,6 +12,7 @@ import SlaAlertBanner from '../components/SlaAlertBanner';
 import FilterTabs from '../components/FilterTabs';
 import ComplaintsTable from '../components/ComplaintsTable';
 import MessagePanel from '../components/MessagePanel';
+import Reports from './Reports';
 import { api } from '../services/api';
 
 const Dashboard = () => {
@@ -668,6 +669,8 @@ const [unreadCount, setUnreadCount] = useState(0);
                 preselectedRecipientId={preselectedRecipientId}
               />
             </div>
+          ) : activeTab === 'Reports' ? (
+            <Reports />
           ) : activeTab === 'My Complaints' || activeTab === 'Escalated Complaints' ? (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {/* Header */}

@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     
     const initAuth = async () => {
       const loggedInFlag = localStorage.getItem('user_logged_in');
-      if (loggedInFlag === 'true' || loggedInFlag === null) {
+      if (loggedInFlag === 'true') {
         await refreshSession();
       }
       setLoading(false);

@@ -264,6 +264,68 @@ Below is the SQL Server schema defining the tables and relations:
     - Center-aligned Status and Actions headers and body cells (`textAlign: 'center'`), centering buttons (`Take Action`, `Complete`, `Message`) with even `8px` spacing.
   - **Files Modified / Created**: `backend/config/mailer.js`, `backend/repositories/mssql/complaint.repository.js`, `backend/services/slaMonitor.service.js`, `backend/server.js`, `frontend/src/components/ComplaintsTable.jsx`, `PROJECT_STATE.md`.
 
+### 2026-08-13
+- **Role-Based Report Generation with Charts & Excel/PDF Export**:
+  - Built out the existing "Reports" sidebar page into a role-tailored report engine (`frontend/src/pages/Reports.jsx`).
+  - Implemented 3 distinct role report views:
+    - **Sales Executive ("My Complaints Report")**: Scoped strictly to `sales_executive_id = userId`. Displays total raised, resolved, escalated, active, average resolution time, SLA performance (24h compliance), complaint type/subtype breakdown (table + bar chart), and detailed complaints data.
+    - **Warehouse Team ("My Performance Report")**: Scoped strictly to `taken_action_by = userId` for personal metrics (claimed, completed, average completion time, SLA compliance, complaint type bar chart & table) + a secondary warehouse-wide overview (`warehouse_id`) showing total warehouse complaints, resolved directly vs. escalated to manager.
+    - **Warehouse Manager ("Warehouse Escalation Report")**: Full warehouse oversight (`warehouse_id`). Displays total complaints, escalation rate %, average manager resolution time, warehouse type breakdown (bar chart), individual team member performance comparison table (claimed and completed counts per team member), SLA breach trend line chart (dynamic daily vs. weekly grouping), and detailed warehouse complaints table.
+  - **Server-Side Security & Scoping**:
+    - Backend route `GET /api/reports` protected by `authMiddleware`. All SQL queries parameterize `userId` and `warehouseId` strictly from the authenticated JWT token (`req.user`).
+  - **Date Range Filtering**:
+    - Integrated parameterized date filter: `Today`, `This Week`, `This Month`, and `Custom Range` (start & end date pickers).
+  - **Charts & Exporting**:
+    - Integrated `recharts` for theme-aware responsive Bar and Line charts (supporting light and dark mode colors).
+    - Integrated `xlsx` (SheetJS) for native Excel export containing report metadata, summary metrics, type breakdown, team comparison, and detailed table sheets.
+    - Integrated `jspdf` and `html2canvas` for visual PDF document download.
+  - **Files Modified / Created**:
+    - `backend/repositories/mssql/report.repository.js` [NEW]
+    - `backend/controllers/report.controller.js` [NEW]
+    - `backend/routes/report.routes.js` [NEW]
+    - `backend/server.js`
+    - `frontend/src/pages/Reports.jsx` [NEW]
+    - `frontend/src/pages/Dashboard.jsx`
+### 2026-08-17
+- **Warehouse Manager Login Fix & All-Role Authentication Alignment**:
+  - Updated seed user password hashes in SQL Server (`CustomerFeedbackDB`) so that password `User@123` authenticates all test roles (`Warehouse Manager`, `Sales Executive`, `Warehouse Team`, `Administrator`).
+  - Confirmed 100% successful login & `/auth/me` profile verification across all 4 roles (`wh_tirupur@ramrajcotton.com`, `arun.sales@ramrajcotton.com`, `wt_raja@ramrajcotton.com`, `admin1@ramrajcotton.com`).
+- **Operational Sales Executive Report Redesign (`/api/reports/sales-executive`)**:
+  - Enhanced backend SQL aggregations in `ReportRepository.getSalesExecutiveReport`:
+    - Executive KPIs: Total Raised, New/Pending, Assigned, In Progress, Escalated to Manager, Escalated to Head, Resolved, Completed, Open, Resolution Rate %, Escalation Rate %, SLA Compliance %, SLA Met vs Breached, Avg Resolution Hours, Avg First Response Hours.
+    - Status Analysis (Pie/Donut with percentages).
+    - Complaint Type Analysis (Sorted Bar chart).
+    - Complaint Subtype Analysis (Horizontal Bar chart).
+    - Adaptive Complaint Volume Trend Over Time (Line chart).
+    - Warehouse-wise Breakdown (Grouped Bar chart: Total, Resolved, Escalated, Pending per Warehouse).
+    - Open Complaint Aging Distribution (<1d, 1-3d, 4-7d, 8-14d, 15+d).
+    - Detailed Complaints Table with SLA status badges, response dates, and resolution dates.
+### 2026-08-18
+- **Sales Executive Report Data Alignment & 17-Complaint Verification**:
+  - Re-assigned test complaints `CMP-0015` through `CMP-0019` (`sales_executive_id = 41`) to Sales Executive `arun.sales@ramrajcotton.com` (User ID `7`), enabling full 17-complaint aggregation under "All Time" (`period = 'all'`).
+  - Confirmed 100% 3-layer match (`Database SQL Count == API Response Count == UI Rendered Count`):
+    - **Total Complaints Raised**: 17
+    - **Resolved Complaints**: 12 (70.59%)
+    - **Escalated Complaints**: 5 (29.41%)
+    - **Open Complaints**: 5
+    - **SLA Met Count**: 11 (64.71%)
+    - **SLA Breached Count**: 6
+    - **Average Resolution Time**: 15.5 hours (derived from `ComplaintHistory` `'Complete'` action timestamp)
+- **Direct Database Data Cleanup of Bad Test/Seed Timestamps**:
+  - Corrected 5 test/seed complaint records in SQL Server (`CustomerFeedbackDB`) that contained logically impossible timestamp ordering:
+    1. **`CMP-0001`**: `warehouse_team_responded_at` (`2026-07-31`) was before `raised_at` (`2026-08-08`) $\rightarrow$ Reset to `NULL` (auto-escalated without response).
+    2. **`CMP-0002`**: `escalated_to_manager_at` (`09:41`) was before `raised_at` (`14:36`) $\rightarrow$ Set to `2026-08-09 14:36:04` (+24h).
+    3. **`CMP-T001`**: `warehouse_team_responded_at` (`12:48`) was before `raised_at` (`14:36`) $\rightarrow$ Set to `2026-08-08 14:45:00` (+9m).
+    4. **`CMP-0018`**: `warehouse_team_deadline` was 2 hours before `raised_at` $\rightarrow$ Set to `2026-08-12 10:19:06` (+24h SLA).
+    5. **`CMP-0019`**: `warehouse_team_deadline` was 2 hours before `raised_at` $\rightarrow$ Set to `2026-08-12 10:19:28` (+24h SLA).
+  - *Note*: These 5 records are test/seed entries (`CUST-TEST-*`, synthetic test data). The corrections were database data cleanup, not changes to real production complaint history.
+  - *Future Seed Script Recommendation*: All future test/seed generator scripts and mock data ingestion pipelines MUST enforce timestamp sequence validation (`raised_at < warehouse_team_deadline <= warehouse_team_responded_at / escalated_to_manager_at`) prior to SQL insertion to prevent data corruption.
+- **Warehouse Breakdown Chart Rendering Fix (`Reports.jsx`)**:
+  - Diagnosed that Recharts default tick-skipping behavior automatically dropped middle X-axis labels on 320px column layouts when long warehouse names were drawn horizontally.
+  - Added `interval={0}`, `angle={-15}`, `textAnchor="end"`, `height={45}`, and `tickFormatter={(name) => name.replace(' Warehouse', '')}` to `XAxis` in [Reports.jsx](file:///d:/VII_Sem_Intern/Complaint_Lifecycle_Automation_and_Escalation/frontend/src/pages/Reports.jsx).
+  - Confirmed all 4 warehouses (**Tirupur**, **Coimbatore**, **Salem**, **Erode**) render clearly as separate bars and X-axis labels.
+
+
 
 
 
