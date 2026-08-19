@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, Download, FileSpreadsheet, FileText, RefreshCw, 
   CheckCircle2, ShieldAlert, Clock, BarChart3, TrendingUp, UserCheck, 
-  Building2, AlertTriangle, PieChart as PieIcon
+  Building2, AlertTriangle, PieChart as PieIcon, AlertCircle
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -45,13 +45,11 @@ const Reports = () => {
     setLoading(true);
     setError('');
     try {
-      let endpoint = '/reports';
+      let endpoint = '/reports/sales-executive';
       if (role === 'Sales Executive') {
         endpoint = '/reports/sales-executive';
-      } else if (role === 'Warehouse Team') {
-        endpoint = '/reports/warehouse-team';
-      } else if (role === 'Warehouse Manager' || role === 'Manager' || role === 'Administrator' || role === 'Admin') {
-        endpoint = '/reports/warehouse-manager';
+      } else if (role === 'Warehouse Team' || role === 'Warehouse Manager' || role === 'Manager' || role === 'Administrator' || role === 'Admin') {
+        endpoint = '/reports/warehouse';
       }
 
       let url = `${endpoint}?period=${period}`;
@@ -551,7 +549,9 @@ const Reports = () => {
                     </ResponsiveContainer>
                   ) : (
                     <div style={{ padding: '24px', textAlign: 'center', color: '#10B981', fontWeight: '600', fontSize: '13px' }}>
-                      All complaints in this period are either resolved or within initial SLA limits. Zero overdue open complaints!
+                      {(reportData.summary?.totalComplaints || 0) === 0 
+                        ? "No complaints raised in this period." 
+                        : "All complaints in this period are either resolved or within initial SLA limits. Zero overdue open complaints!"}
                     </div>
                   )}
                 </ChartCard>
@@ -570,63 +570,103 @@ const Reports = () => {
                   A. My Complaint Activity
                 </h2>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                  <StatSummaryCard title="Handled Complaints" value={reportData.personalSummary.handledCount} icon={<UserCheck size={18} />} color="blue" />
+                  <StatSummaryCard title="Handled / Assigned" value={reportData.personalSummary.handledCount} icon={<UserCheck size={18} />} color="blue" />
                   <StatSummaryCard title="Pending" value={reportData.personalSummary.pendingCount} icon={<Clock size={18} />} color="amber" />
                   <StatSummaryCard title="In Progress" value={reportData.personalSummary.inProgressCount} icon={<RefreshCw size={18} />} color="purple" />
                   <StatSummaryCard title="Completed" value={reportData.personalSummary.completedCount} icon={<CheckCircle2 size={18} />} color="green" />
                   <StatSummaryCard title="Escalated" value={reportData.personalSummary.escalatedCount} icon={<ShieldAlert size={18} />} color="red" />
-                  <StatSummaryCard title="Avg Completion Time" value={`${reportData.personalSummary.avgCompletionHours} hrs`} icon={<Clock size={18} />} color="purple" />
+                  <StatSummaryCard title="Avg Completion Time" value={typeof reportData.personalSummary.avgCompletionHours === 'string' && (reportData.personalSummary.avgCompletionHours.includes('min') || reportData.personalSummary.avgCompletionHours.includes('hr')) ? reportData.personalSummary.avgCompletionHours : `${reportData.personalSummary.avgCompletionHours} hrs`} icon={<Clock size={18} />} color="purple" />
                   <StatSummaryCard title="SLA Compliance" value={`${reportData.personalSummary.slaComplianceRate}%`} icon={<TrendingUp size={18} />} color="green" />
+                  <StatSummaryCard title="Most Common Issue" value={reportData.mostCommonIssue?.display || 'N/A'} icon={<AlertCircle size={18} />} color="amber" />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
                   {/* Status Breakdown Chart */}
                   <ChartCard title="My Status Breakdown">
                     {reportData.statusBreakdown && reportData.statusBreakdown.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <PieChart>
-                          <Pie data={reportData.statusBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <PieChart margin={{ top: 15, bottom: 15, left: 10, right: 10 }}>
+                          <Pie 
+                            data={reportData.statusBreakdown} 
+                            dataKey="value" 
+                            nameKey="name" 
+                            cx="50%" 
+                            cy="45%" 
+                            innerRadius={40}
+                            outerRadius={65} 
+                            paddingAngle={4}
+                          >
                             {reportData.statusBreakdown.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                             ))}
                           </Pie>
                           <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
-                          <Legend />
+                          <Legend 
+                            verticalAlign="bottom" 
+                            height={40}
+                            formatter={(value, entry) => {
+                              const item = entry?.payload || {};
+                              const count = item.value || 0;
+                              const pct = item.percentage !== undefined ? item.percentage : 100;
+                              return `${value.replace(' to Manager', '')}: ${count} (${pct}%)`;
+                            }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
-                    ) : <EmptyStateText message="No activity for selected range" />}
+                    ) : <EmptyStateText message="No complaint activity for selected date range" />}
                   </ChartCard>
 
-                  {/* Type Breakdown Chart */}
-                  <ChartCard title="Handled Complaints by Type">
-                    {reportData.typeBreakdown && reportData.typeBreakdown.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={reportData.typeBreakdown}>
+                  {/* Subtype Breakdown Chart */}
+                  <ChartCard title="Handled Complaints by Subtype">
+                    {reportData.subtypeBreakdown && reportData.subtypeBreakdown.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={reportData.subtypeBreakdown} margin={{ bottom: 25, top: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
-                          <XAxis dataKey="typeName" stroke={chartTextColor} fontSize={12} />
-                          <YAxis stroke={chartTextColor} fontSize={12} allowDecimals={false} />
+                          <XAxis dataKey="subtypeName" stroke={chartTextColor} fontSize={10} interval={0} angle={-20} textAnchor="end" height={45} />
+                          <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} />
                           <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
-                          <Bar dataKey="count" name="Handled" fill="#10B981" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="count" name="Handled" fill="#10B981" radius={[4, 4, 0, 0]} barSize={16} />
                         </BarChart>
                       </ResponsiveContainer>
-                    ) : <EmptyStateText message="No type data for selected range" />}
+                    ) : <EmptyStateText message="No subtype data for selected date range" />}
                   </ChartCard>
 
                   {/* Warehouse Complaint Trend */}
-                  <ChartCard title="Warehouse Complaint Trend">
+                  <ChartCard title="Warehouse Volume Trend">
                     {reportData.complaintTrend && reportData.complaintTrend.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <LineChart data={reportData.complaintTrend}>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={reportData.complaintTrend} margin={{ top: 15, right: 20, left: 0, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
-                          <XAxis dataKey="label" stroke={chartTextColor} fontSize={12} />
-                          <YAxis stroke={chartTextColor} fontSize={12} allowDecimals={false} />
+                          <XAxis dataKey="label" stroke={chartTextColor} fontSize={11} />
+                          <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} domain={[0, (dataMax) => Math.max(dataMax + 1, 4)]} />
                           <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
                           <Line type="monotone" dataKey="count" name="Warehouse Complaints" stroke="#6366F1" strokeWidth={3} dot={{ r: 4 }} />
                         </LineChart>
                       </ResponsiveContainer>
-                    ) : <EmptyStateText message="No trend data for selected range" />}
+                    ) : <EmptyStateText message="No volume trend data for selected date range" />}
                   </ChartCard>
                 </div>
+
+                {/* Open Complaint Aging Distribution for Member */}
+                <ChartCard title="Open Complaint Aging Distribution (Assigned)">
+                  {reportData.agingBuckets && reportData.agingBuckets.some(b => b.count > 0) ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={reportData.agingBuckets} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
+                        <XAxis dataKey="bucket" stroke={chartTextColor} fontSize={11} />
+                        <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} />
+                        <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
+                        <Bar dataKey="count" name="Open Complaints" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={24} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ padding: '24px', textAlign: 'center', color: '#10B981', fontWeight: '600', fontSize: '13px' }}>
+                      {(reportData.personalSummary?.handledCount || 0) === 0 
+                        ? "No complaints assigned or handled in this period." 
+                        : "All assigned complaints in this date range are resolved! Zero open complaints!"}
+                    </div>
+                  )}
+                </ChartCard>
 
                 <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', margin: '16px 0 0 0' }}>
                   B. Warehouse Complaint Overview
@@ -634,15 +674,15 @@ const Reports = () => {
                 <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                   <div style={{ padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Total Warehouse Complaints</span>
-                    <div style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', marginTop: '4px' }}>{reportData.warehouseSummary.totalWarehouseComplaints}</div>
+                    <div style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', marginTop: '4px' }}>{reportData.warehouseSummary?.totalWarehouseComplaints || 0}</div>
                   </div>
                   <div style={{ padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
                     <span style={{ fontSize: '12px', color: '#10B981' }}>Resolved Directly by Team</span>
-                    <div style={{ fontSize: '22px', fontWeight: '800', color: '#10B981', marginTop: '4px' }}>{reportData.warehouseSummary.resolvedDirectlyByTeam}</div>
+                    <div style={{ fontSize: '22px', fontWeight: '800', color: '#10B981', marginTop: '4px' }}>{reportData.warehouseSummary?.resolvedDirectlyByTeam || 0}</div>
                   </div>
                   <div style={{ padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
                     <span style={{ fontSize: '12px', color: '#EF4444' }}>Escalated to Manager</span>
-                    <div style={{ fontSize: '22px', fontWeight: '800', color: '#EF4444', marginTop: '4px' }}>{reportData.warehouseSummary.escalatedToManager}</div>
+                    <div style={{ fontSize: '22px', fontWeight: '800', color: '#EF4444', marginTop: '4px' }}>{reportData.warehouseSummary?.escalatedToManager || 0}</div>
                   </div>
                 </div>
 
@@ -653,60 +693,79 @@ const Reports = () => {
             {/* ───────────────────────────────────────────────────────────── */}
             {/* 3. WAREHOUSE MANAGER REPORT VIEW                              */}
             {/* ───────────────────────────────────────────────────────────── */}
-            {(role === 'Warehouse Manager' || role === 'Administrator' || role === 'Admin') && reportData.summary && (
+            {(role === 'Warehouse Manager' || role === 'Manager' || role === 'Administrator' || role === 'Admin') && reportData.summary && (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                   <StatSummaryCard title="Total Complaints" value={reportData.summary.totalComplaints} icon={<Building2 size={18} />} color="blue" />
-                  <StatSummaryCard title="Pending" value={reportData.summary.pendingCount} icon={<Clock size={18} />} color="amber" />
+                  <StatSummaryCard title="Pending / Open" value={reportData.summary.openCount || reportData.summary.pendingCount} icon={<Clock size={18} />} color="amber" />
                   <StatSummaryCard title="In Progress" value={reportData.summary.inProgressCount} icon={<RefreshCw size={18} />} color="purple" />
                   <StatSummaryCard title="Resolved" value={reportData.summary.resolvedCount} icon={<CheckCircle2 size={18} />} color="green" />
-                  <StatSummaryCard title="Escalated" value={reportData.summary.totalEscalated} icon={<ShieldAlert size={18} />} color="red" />
+                  <StatSummaryCard title="Escalated to Manager" value={reportData.summary.totalEscalated} icon={<ShieldAlert size={18} />} color="red" />
                   <StatSummaryCard title="Escalation Rate" value={`${reportData.summary.escalationRate}%`} icon={<AlertTriangle size={18} />} color="red" />
-                  <StatSummaryCard title="Avg Manager Resolution" value={`${reportData.summary.avgEscalatedResolutionHours} hrs`} icon={<Clock size={18} />} color="purple" />
-                  <StatSummaryCard title="SLA Performance" value={`${reportData.summary.slaPerformanceRate}%`} icon={<TrendingUp size={18} />} color="blue" />
+                  <StatSummaryCard title="Avg Resolution Time" value={typeof reportData.summary.avgEscalatedResolutionHours === 'string' && (reportData.summary.avgEscalatedResolutionHours.includes('min') || reportData.summary.avgEscalatedResolutionHours.includes('hr')) ? reportData.summary.avgEscalatedResolutionHours : `${reportData.summary.avgEscalatedResolutionHours} hrs`} icon={<Clock size={18} />} color="purple" />
+                  <StatSummaryCard title="SLA Compliance" value={`${reportData.summary.slaPerformanceRate}%`} icon={<TrendingUp size={18} />} color="blue" />
+                  <StatSummaryCard title="Most Common Issue in Warehouse" value={reportData.mostCommonIssue?.display || 'N/A'} icon={<AlertCircle size={18} />} color="amber" />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
                   {/* Status Breakdown */}
                   <ChartCard title="Complaint Status Breakdown">
                     {reportData.statusBreakdown && reportData.statusBreakdown.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <PieChart>
-                          <Pie data={reportData.statusBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <PieChart margin={{ top: 15, bottom: 15, left: 10, right: 10 }}>
+                          <Pie 
+                            data={reportData.statusBreakdown} 
+                            dataKey="value" 
+                            nameKey="name" 
+                            cx="50%" 
+                            cy="45%" 
+                            innerRadius={40}
+                            outerRadius={65} 
+                            paddingAngle={4}
+                          >
                             {reportData.statusBreakdown.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                             ))}
                           </Pie>
                           <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
-                          <Legend />
+                          <Legend 
+                            verticalAlign="bottom" 
+                            height={40}
+                            formatter={(value, entry) => {
+                              const item = entry?.payload || {};
+                              const count = item.value || 0;
+                              const pct = item.percentage !== undefined ? item.percentage : 100;
+                              return `${value.replace(' to Manager', '')}: ${count} (${pct}%)`;
+                            }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
-                    ) : <EmptyStateText message="No status data for selected range" />}
+                    ) : <EmptyStateText message="No status data for selected date range" />}
                   </ChartCard>
 
-                  {/* Type Breakdown */}
-                  <ChartCard title="Complaint Type Breakdown">
-                    {reportData.typeBreakdown && reportData.typeBreakdown.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={reportData.typeBreakdown}>
+                  {/* Subtype Breakdown */}
+                  <ChartCard title="Complaint Subtype Analysis">
+                    {reportData.subtypeBreakdown && reportData.subtypeBreakdown.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={reportData.subtypeBreakdown} margin={{ bottom: 25, top: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
-                          <XAxis dataKey="typeName" stroke={chartTextColor} fontSize={12} />
-                          <YAxis stroke={chartTextColor} fontSize={12} allowDecimals={false} />
+                          <XAxis dataKey="subtypeName" stroke={chartTextColor} fontSize={10} interval={0} angle={-20} textAnchor="end" height={45} />
+                          <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} />
                           <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
-                          <Bar dataKey="count" name="Count" fill="var(--brand-primary)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="count" name="Count" fill="var(--brand-primary)" radius={[4, 4, 0, 0]} barSize={16} />
                         </BarChart>
                       </ResponsiveContainer>
-                    ) : <EmptyStateText message="No type data for selected range" />}
+                    ) : <EmptyStateText message="No subtype data for selected date range" />}
                   </ChartCard>
 
                   {/* SLA Breach Trend */}
                   <ChartCard title={`SLA Breach Trend (${reportData.trendGrouping === 'daily' ? 'Grouped Daily' : 'Grouped Weekly'})`}>
                     {reportData.slaBreachTrend && reportData.slaBreachTrend.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <LineChart data={reportData.slaBreachTrend}>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={reportData.slaBreachTrend} margin={{ top: 15, right: 20, left: 0, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
-                          <XAxis dataKey="label" stroke={chartTextColor} fontSize={12} />
-                          <YAxis stroke={chartTextColor} fontSize={12} allowDecimals={false} />
+                          <XAxis dataKey="label" stroke={chartTextColor} fontSize={11} />
+                          <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} domain={[0, (dataMax) => Math.max(dataMax + 1, 4)]} />
                           <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
                           <Line type="monotone" dataKey="breachCount" name="SLA Breaches" stroke="#EF4444" strokeWidth={3} dot={{ r: 4 }} />
                         </LineChart>
@@ -715,17 +774,38 @@ const Reports = () => {
                   </ChartCard>
                 </div>
 
+                {/* Open Complaint Aging Distribution for Warehouse */}
+                <ChartCard title="Warehouse Open Complaint Aging Distribution">
+                  {reportData.agingBuckets && reportData.agingBuckets.some(b => b.count > 0) ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={reportData.agingBuckets} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
+                        <XAxis dataKey="bucket" stroke={chartTextColor} fontSize={11} />
+                        <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} />
+                        <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
+                        <Bar dataKey="count" name="Open Complaints" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={24} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ padding: '24px', textAlign: 'center', color: '#10B981', fontWeight: '600', fontSize: '13px' }}>
+                      {(reportData.summary?.totalComplaints || 0) === 0 
+                        ? "No complaints raised in this period." 
+                        : "All complaints in this warehouse are resolved! Zero open complaints!"}
+                    </div>
+                  )}
+                </ChartCard>
+
                 {/* Team Comparison Table */}
                 <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                   <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px' }}>
-                    Warehouse Team Member Comparison
+                    Warehouse Team Member Performance Comparison
                   </h3>
                   <div style={{ overflowX: 'auto' }} className="scrollbar-thin">
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                           <th style={{ padding: '10px' }}>Team Member</th>
-                          <th style={{ padding: '10px', textAlign: 'center' }}>Handled</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Handled / Assigned</th>
                           <th style={{ padding: '10px', textAlign: 'center' }}>Completed</th>
                           <th style={{ padding: '10px', textAlign: 'center' }}>Escalated</th>
                           <th style={{ padding: '10px', textAlign: 'center' }}>Pending</th>
@@ -748,7 +828,7 @@ const Reports = () => {
                               <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#10B981' }}>{row.completedCount}</td>
                               <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#EF4444' }}>{row.escalatedCount}</td>
                               <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#F59E0B' }}>{row.pendingCount}</td>
-                              <td style={{ padding: '10px', textAlign: 'center', color: 'var(--text-secondary)' }}>{row.avgResolutionHours} hrs</td>
+                              <td style={{ padding: '10px', textAlign: 'center', color: 'var(--text-secondary)' }}>{row.avgResolutionDisplay || (typeof row.avgResolutionHours === 'string' && (row.avgResolutionHours.includes('min') || row.avgResolutionHours.includes('hr')) ? row.avgResolutionHours : `${row.avgResolutionHours} hrs`)}</td>
                               <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: 'var(--brand-primary)' }}>{row.slaPerformance}</td>
                             </tr>
                           ))

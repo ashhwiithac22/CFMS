@@ -71,8 +71,12 @@ test-results/
 Thumbs.db
 
 # ============================
-# Scratch scripts
+# Scratch & Verification scripts
 # ============================
 scratch/
 backend/scratch/
 frontend/scratch/
+brain/
+*.lnk
+frontend/capture_*.js
+frontend/debug_*.js

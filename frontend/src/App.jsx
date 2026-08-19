@@ -10,6 +10,8 @@ import { useAuth } from './context/AuthContext';
 
 import RaiseComplaint from './pages/RaiseComplaint';
 
+import Reports from './pages/Reports';
+
 function App() {
   const { isAuthenticated } = useAuth();
 
@@ -42,6 +44,15 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/reports" 
+        element={
+          <ProtectedRoute>
+            <Reports />
           </ProtectedRoute>
         } 
       />

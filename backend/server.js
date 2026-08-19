@@ -1,4 +1,21 @@
 require('dotenv').config();
+
+process.on('uncaughtException', (err) => {
+  console.error('====================================================');
+  console.error('CRITICAL UNCAUGHT EXCEPTION — EXITING PROCESS:');
+  console.error(err.stack || err);
+  console.error('====================================================');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('====================================================');
+  console.error('CRITICAL UNHANDLED REJECTION — EXITING PROCESS:');
+  console.error(reason?.stack || reason);
+  console.error('====================================================');
+  process.exit(1);
+});
+
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
@@ -107,6 +124,8 @@ app.use((err, req, res, next) => {
 const { verifySmtp } = require('./config/mailer');
 const { startSlaMonitor } = require('./services/slaMonitor.service');
 
+let server = null;
+
 // Database connection & Server startup
 async function startServer() {
   try {
@@ -131,8 +150,19 @@ async function startServer() {
     }
 
     // Bind HTTP server to PORT & 0.0.0.0 so both localhost and 127.0.0.1 IPv4/IPv6 connections succeed
-    app.listen(PORT, '0.0.0.0', () => {
+    server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Backend server is running on http://localhost:${PORT}`);
+    });
+
+    // Explicit error listener on the server object to catch port binding failures
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[FATAL BIND ERROR] Port ${PORT} is already in use by another process.`);
+        console.error(`Please terminate the process on port ${PORT} or wait for port release.`);
+      } else {
+        console.error('[FATAL SERVER ERROR] HTTP server failed:', err.message);
+      }
+      process.exit(1);
     });
 
     // Run non-blocking SMTP verification and background SLA monitor
@@ -143,6 +173,39 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Graceful shutdown handlers to unbind socket on termination or nodemon restart
+function gracefulShutdown(signal) {
+  console.log(`[SHUTDOWN] Received ${signal}. Closing HTTP server on port ${PORT}...`);
+  if (server) {
+    server.close(() => {
+      console.log(`[SHUTDOWN] HTTP server closed gracefully. Port ${PORT} freed.`);
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.warn('[SHUTDOWN] Forced exit timeout triggered.');
+      process.exit(1);
+    }, 3000);
+  } else {
+    process.exit(0);
+  }
+}
+
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Nodemon graceful restart handler
+process.once('SIGUSR2', () => {
+  console.log('[NODEMON RESTART] Closing HTTP server to release port 4000...');
+  if (server) {
+    server.close(() => {
+      console.log('[NODEMON RESTART] Port 4000 released cleanly.');
+      process.kill(process.pid, 'SIGUSR2');
+    });
+  } else {
+    process.kill(process.pid, 'SIGUSR2');
+  }
+});
 
 startServer();
 

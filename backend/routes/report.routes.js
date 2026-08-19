@@ -7,6 +7,7 @@ const reportController = require('../controllers/report.controller');
 router.get('/sales-executive', authMiddleware, reportController.getSalesExecutiveReport);
 router.get('/warehouse-team', authMiddleware, reportController.getWarehouseTeamReport);
 router.get('/warehouse-manager', authMiddleware, reportController.getWarehouseManagerReport);
+router.get('/warehouse', authMiddleware, reportController.getWarehouseReport);
 
 // Default auto-detecting route
 router.get('/', authMiddleware, reportController.getReportData);

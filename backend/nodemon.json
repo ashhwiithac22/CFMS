@@ -1,0 +1,7 @@
+{
+  "restartable": "rs",
+  "ignore": [".git", "node_modules/**/node_modules", "scratch/*", "*.log", "brain/*"],
+  "watch": ["server.js", "controllers", "repositories", "routes", "services", "middlewares", "config"],
+  "delay": "1000",
+  "ext": "js,json"
+}

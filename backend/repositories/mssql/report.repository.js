@@ -27,6 +27,43 @@ class ReportRepository {
     return clause;
   }
 
+  formatDuration(avgMinutes) {
+    if (!avgMinutes || avgMinutes <= 0) return '0 hrs';
+    const mins = Math.round(avgMinutes);
+    if (mins < 60) {
+      return `${mins === 0 ? 1 : mins} mins`;
+    }
+    return `${(avgMinutes / 60).toFixed(1)} hrs`;
+  }
+
+  calculateMostCommonIssue(subtypeArray) {
+    if (!subtypeArray || subtypeArray.length === 0) {
+      return { names: [], maxCount: 0, display: 'N/A' };
+    }
+    const items = subtypeArray.map(item => ({
+      name: item.subtypeName || item.name || 'General',
+      count: item.count !== undefined ? item.count : (item.value || 0)
+    }));
+
+    const maxCount = Math.max(...items.map(i => i.count));
+    if (maxCount <= 0) {
+      return { names: [], maxCount: 0, display: 'N/A' };
+    }
+    const topItems = items.filter(i => i.count === maxCount);
+    const names = topItems.map(i => i.name);
+    const namesStr = names.join(', ');
+    const unit = maxCount > 1 ? 'complaints' : 'complaint';
+    const display = topItems.length > 1 
+      ? `${namesStr} (${maxCount} ${unit} each)` 
+      : `${namesStr} (${maxCount} ${unit})`;
+    
+    return {
+      names,
+      maxCount,
+      display
+    };
+  }
+
   /**
    * 1. Sales Executive Report: "My Complaints Report"
    * Scoped strictly to complaints raised by logged-in Sales Executive.
@@ -313,7 +350,7 @@ class ReportRepository {
 
   /**
    * 2. Warehouse Team Report: "My Performance Report"
-   * Personal scope: logged-in team member's claimed/completed complaints.
+   * Personal scope: logged-in team member's assigned/claimed/completed complaints.
    * Warehouse scope: team member's assigned warehouse.
    */
   async getWarehouseTeamReport(userId, warehouseId, period, startDate, endDate) {
@@ -335,15 +372,15 @@ class ReportRepository {
           WHEN c.status IN ('Resolved', 'Completed') THEN DATEDIFF(minute, ISNULL(c.warehouse_team_responded_at, c.raised_at), ISNULL(c.updated_at, GETDATE()))
           ELSE NULL 
         END) AS avgCompletionMinutes,
-        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND (c.escalated_to_manager_at IS NULL OR DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24) THEN 1 ELSE 0 END) AS resolvedWithin24h
+        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24 THEN 1 ELSE 0 END) AS resolvedWithin24h
       FROM Complaints c
       WHERE c.warehouse_id = @warehouseId 
-        AND c.taken_action_by = @userId ${dateClausePersonal}
+        AND @userId = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id) ${dateClausePersonal}
     `;
     const personalRes = await reqPersonal.query(personalQuery);
     const p = personalRes.recordset[0] || {};
 
-    const avgCompletionHours = p.avgCompletionMinutes ? (p.avgCompletionMinutes / 60).toFixed(1) : '0.0';
+    const avgCompletionHours = this.formatDuration(p.avgCompletionMinutes);
     const totalCompleted = p.completedCount || 0;
     const resolvedWithin24h = p.resolvedWithin24h || 0;
     const personalSlaCompliance = totalCompleted > 0 ? Math.round((resolvedWithin24h / totalCompleted) * 100) : 100;
@@ -354,14 +391,17 @@ class ReportRepository {
     reqStatus.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
     const dateClauseStatus = this.getDateRangeClause(period, startDate, endDate, reqStatus, 'c');
     const statusQuery = `
-      SELECT c.status AS name, COUNT(*) AS value
+      SELECT 
+        c.status AS name, 
+        COUNT(*) AS value,
+        CAST(ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM Complaints c2 WHERE c2.warehouse_id = @warehouseId AND @userId = ISNULL(c2.taken_action_by, c2.assigned_warehouse_team_id) ${dateClauseStatus.replace(/c\./g, 'c2.')}), 0), 1) AS FLOAT) AS percentage
       FROM Complaints c
-      WHERE c.warehouse_id = @warehouseId AND c.taken_action_by = @userId ${dateClauseStatus}
+      WHERE c.warehouse_id = @warehouseId AND @userId = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id) ${dateClauseStatus}
       GROUP BY c.status
     `;
     const statusRes = await reqStatus.query(statusQuery);
 
-    // 3. Personal Type Breakdown
+    // 3. Personal Subtype Breakdown
     const reqType = pool.request();
     reqType.input('userId', sql.Int, parseInt(userId, 10));
     reqType.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
@@ -369,32 +409,52 @@ class ReportRepository {
     const typeQuery = `
       SELECT 
         ct.name AS typeName,
-        ISNULL(cs.name, 'General') AS subtypeName,
+        CASE 
+          WHEN cs.name IS NOT NULL AND cs.name <> 'General' THEN cs.name
+          ELSE 'General (' + ct.name + ')'
+        END AS subtypeName,
         COUNT(*) AS count
       FROM Complaints c
       JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
       LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
-      WHERE c.warehouse_id = @warehouseId AND c.taken_action_by = @userId ${dateClauseType}
+      WHERE c.warehouse_id = @warehouseId AND @userId = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id) ${dateClauseType}
       GROUP BY ct.name, cs.name
       ORDER BY count DESC
     `;
     const typeRes = await reqType.query(typeQuery);
 
-    // 4. Warehouse-Wide Complaint Trend
+    // 4. Warehouse-Wide Complaint Trend (Calendar Date / Date-Range Labels)
     const reqTrend = pool.request();
     reqTrend.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
     const dateClauseTrend = this.getDateRangeClause(period, startDate, endDate, reqTrend, 'c');
     const isShortRange = period === 'today' || period === 'week';
-    const trendGroupExpr = isShortRange ? "CONVERT(VARCHAR(10), c.raised_at, 120)" : "('Week ' + CAST(DATEPART(week, c.raised_at) AS VARCHAR))";
-    const trendQuery = `
-      SELECT 
-        ${trendGroupExpr} AS label,
-        COUNT(*) AS count
-      FROM Complaints c
-      WHERE c.warehouse_id = @warehouseId ${dateClauseTrend}
-      GROUP BY ${trendGroupExpr}
-      ORDER BY label ASC
-    `;
+    
+    let trendQuery = '';
+    if (isShortRange) {
+      trendQuery = `
+        SELECT 
+          FORMAT(c.raised_at, 'dd MMM') AS label,
+          COUNT(*) AS count
+        FROM Complaints c
+        WHERE c.warehouse_id = @warehouseId ${dateClauseTrend}
+        GROUP BY CONVERT(VARCHAR(10), c.raised_at, 120), FORMAT(c.raised_at, 'dd MMM')
+        ORDER BY CONVERT(VARCHAR(10), c.raised_at, 120) ASC
+      `;
+    } else {
+      trendQuery = `
+        SELECT 
+          CASE 
+            WHEN FORMAT(MIN(c.raised_at), 'dd MMM') = FORMAT(MAX(c.raised_at), 'dd MMM') 
+            THEN FORMAT(MIN(c.raised_at), 'dd MMM')
+            ELSE FORMAT(MIN(c.raised_at), 'dd MMM') + ' – ' + FORMAT(MAX(c.raised_at), 'dd MMM')
+          END AS label,
+          COUNT(*) AS count
+        FROM Complaints c
+        WHERE c.warehouse_id = @warehouseId ${dateClauseTrend}
+        GROUP BY DATEPART(year, c.raised_at), DATEPART(week, c.raised_at)
+        ORDER BY MIN(c.raised_at) ASC
+      `;
+    }
     const trendRes = await reqTrend.query(trendQuery);
 
     // 5. Warehouse-Wide Overview
@@ -412,7 +472,34 @@ class ReportRepository {
     const whRes = await reqWh.query(whQuery);
     const wh = whRes.recordset[0] || {};
 
-    // 6. Detailed Personal Complaints Table
+    // 6. Open Complaint Aging Buckets
+    const reqAging = pool.request();
+    reqAging.input('userId', sql.Int, parseInt(userId, 10));
+    reqAging.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
+    const dateClauseAging = this.getDateRangeClause(period, startDate, endDate, reqAging, 'c');
+    const agingQuery = `
+      SELECT 
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) <= 24 THEN 1 ELSE 0 END) AS bucketLessThan24h,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 24 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 72 THEN 1 ELSE 0 END) AS bucket1To3Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 72 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 168 THEN 1 ELSE 0 END) AS bucket4To7Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 168 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 336 THEN 1 ELSE 0 END) AS bucket8To14Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 336 THEN 1 ELSE 0 END) AS bucket15PlusDays
+      FROM Complaints c
+      WHERE c.warehouse_id = @warehouseId 
+        AND @userId = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id)
+        AND c.status NOT IN ('Resolved', 'Completed', 'Closed') ${dateClauseAging}
+    `;
+    const agingRes = await reqAging.query(agingQuery);
+    const ag = agingRes.recordset[0] || {};
+    const agingBuckets = [
+      { bucket: '< 1 Day', count: ag.bucketLessThan24h || 0 },
+      { bucket: '1-3 Days', count: ag.bucket1To3Days || 0 },
+      { bucket: '4-7 Days', count: ag.bucket4To7Days || 0 },
+      { bucket: '8-14 Days', count: ag.bucket8To14Days || 0 },
+      { bucket: '15+ Days', count: ag.bucket15PlusDays || 0 },
+    ];
+
+    // 7. Detailed Personal Complaints Table
     const reqDetails = pool.request();
     reqDetails.input('userId', sql.Int, parseInt(userId, 10));
     reqDetails.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
@@ -434,7 +521,7 @@ class ReportRepository {
       JOIN Users u_sales ON c.sales_executive_id = u_sales.id
       JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
       LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
-      WHERE c.warehouse_id = @warehouseId AND c.taken_action_by = @userId ${dateClauseDetails}
+      WHERE c.warehouse_id = @warehouseId AND @userId = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id) ${dateClauseDetails}
       ORDER BY c.raised_at DESC
     `;
     const detailsRes = await reqDetails.query(detailsQuery);
@@ -450,8 +537,10 @@ class ReportRepository {
         slaComplianceRate: personalSlaCompliance
       },
       statusBreakdown: statusRes.recordset,
-      typeBreakdown: typeRes.recordset,
+      subtypeBreakdown: typeRes.recordset,
+      mostCommonIssue: this.calculateMostCommonIssue(typeRes.recordset),
       complaintTrend: trendRes.recordset,
+      agingBuckets,
       warehouseSummary: {
         totalWarehouseComplaints: wh.totalWarehouseComplaints || 0,
         resolvedDirectlyByTeam: wh.resolvedDirectlyByTeam || 0,
@@ -478,6 +567,7 @@ class ReportRepository {
         SUM(CASE WHEN c.status IN ('Pending', 'Assigned', 'New') THEN 1 ELSE 0 END) AS pendingCount,
         SUM(CASE WHEN c.status = 'In Progress' THEN 1 ELSE 0 END) AS inProgressCount,
         SUM(CASE WHEN c.status IN ('Resolved', 'Completed') THEN 1 ELSE 0 END) AS resolvedCount,
+        SUM(CASE WHEN c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS openCount,
         SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL THEN 1 ELSE 0 END) AS totalEscalated,
         SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND c.escalated_to_manager_at IS NULL THEN 1 ELSE 0 END) AS resolvedDirectlyByTeam,
         AVG(CASE 
@@ -485,7 +575,7 @@ class ReportRepository {
           THEN DATEDIFF(minute, c.escalated_to_manager_at, ISNULL(c.updated_at, GETDATE()))
           ELSE NULL 
         END) AS avgEscalatedResolutionMinutes,
-        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND (c.escalated_to_manager_at IS NULL OR DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24) THEN 1 ELSE 0 END) AS resolvedWithinSla
+        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24 THEN 1 ELSE 0 END) AS resolvedWithinSla
       FROM Complaints c
       WHERE c.warehouse_id = @warehouseId ${dateClauseSummary}
     `;
@@ -496,7 +586,7 @@ class ReportRepository {
     const totalEscalated = s.totalEscalated || 0;
     const totalResolved = s.resolvedCount || 0;
     const escalationRate = totalComplaints > 0 ? Math.round((totalEscalated / totalComplaints) * 100) : 0;
-    const avgEscalatedResolutionHours = s.avgEscalatedResolutionMinutes ? (s.avgEscalatedResolutionMinutes / 60).toFixed(1) : '0.0';
+    const avgEscalatedResolutionHours = this.formatDuration(s.avgEscalatedResolutionMinutes);
     const slaPerformanceRate = totalResolved > 0 ? Math.round(((s.resolvedWithinSla || 0) / totalResolved) * 100) : 100;
 
     // 2. Status Breakdown
@@ -504,7 +594,10 @@ class ReportRepository {
     reqStatus.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
     const dateClauseStatus = this.getDateRangeClause(period, startDate, endDate, reqStatus, 'c');
     const statusQuery = `
-      SELECT c.status AS name, COUNT(*) AS value
+      SELECT 
+        c.status AS name, 
+        COUNT(*) AS value,
+        CAST(ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM Complaints c2 WHERE c2.warehouse_id = @warehouseId ${dateClauseStatus.replace(/c\./g, 'c2.')}), 0), 1) AS FLOAT) AS percentage
       FROM Complaints c
       WHERE c.warehouse_id = @warehouseId ${dateClauseStatus}
       GROUP BY c.status
@@ -518,7 +611,10 @@ class ReportRepository {
     const typeQuery = `
       SELECT 
         ct.name AS typeName,
-        ISNULL(cs.name, 'General') AS subtypeName,
+        CASE 
+          WHEN cs.name IS NOT NULL AND cs.name <> 'General' THEN cs.name
+          ELSE 'General (' + ct.name + ')'
+        END AS subtypeName,
         COUNT(*) AS count
       FROM Complaints c
       JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
@@ -536,7 +632,8 @@ class ReportRepository {
     const teamQuery = `
       SELECT 
         u.id AS memberId,
-        (u.first_name + ' ' + u.last_name) AS memberName,
+        (u.first_name + ' ' + u.last_name + CASE WHEN u.role = 'Warehouse Manager' THEN ' (Manager)' ELSE '' END) AS memberName,
+        u.role,
         COUNT(c.id) AS handledCount,
         SUM(CASE WHEN c.status IN ('Resolved', 'Completed') THEN 1 ELSE 0 END) AS completedCount,
         SUM(CASE WHEN c.status LIKE '%Escalated%' THEN 1 ELSE 0 END) AS escalatedCount,
@@ -545,11 +642,12 @@ class ReportRepository {
           WHEN c.status IN ('Resolved', 'Completed') THEN DATEDIFF(minute, ISNULL(c.warehouse_team_responded_at, c.raised_at), ISNULL(c.updated_at, GETDATE()))
           ELSE NULL 
         END) AS avgResMinutes,
-        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND (c.escalated_to_manager_at IS NULL OR DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24) THEN 1 ELSE 0 END) AS withinSlaCount
+        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') AND DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24 THEN 1 ELSE 0 END) AS withinSlaCount
       FROM Users u
-      LEFT JOIN Complaints c ON c.taken_action_by = u.id AND c.warehouse_id = @warehouseId ${dateClauseTeam}
-      WHERE u.warehouse_id = @warehouseId AND u.role = 'Warehouse Team'
-      GROUP BY u.id, u.first_name, u.last_name
+      LEFT JOIN Complaints c ON u.id = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id) AND c.warehouse_id = @warehouseId ${dateClauseTeam}
+      WHERE u.warehouse_id = @warehouseId AND (u.role = 'Warehouse Team' OR u.role = 'Warehouse Manager')
+      GROUP BY u.id, u.first_name, u.last_name, u.role
+      HAVING (u.role = 'Warehouse Team' OR COUNT(c.id) > 0)
       ORDER BY handledCount DESC
     `;
     const teamRes = await reqTeam.query(teamQuery);
@@ -557,7 +655,7 @@ class ReportRepository {
       const completed = row.completedCount || 0;
       const withinSla = row.withinSlaCount || 0;
       const slaRate = completed > 0 ? Math.round((withinSla / completed) * 100) : 100;
-      const avgHours = row.avgResMinutes ? (row.avgResMinutes / 60).toFixed(1) : '0.0';
+      const avgFormatted = this.formatDuration(row.avgResMinutes);
       return {
         memberId: row.memberId,
         memberName: row.memberName,
@@ -565,7 +663,8 @@ class ReportRepository {
         completedCount: completed,
         escalatedCount: row.escalatedCount || 0,
         pendingCount: row.pendingCount || 0,
-        avgResolutionHours: parseFloat(avgHours),
+        avgResolutionDisplay: avgFormatted,
+        avgResolutionHours: avgFormatted,
         slaPerformance: `${slaRate}%`
       };
     });
@@ -580,27 +679,56 @@ class ReportRepository {
     if (isShortRange) {
       trendQuery = `
         SELECT 
-          CONVERT(VARCHAR(10), c.raised_at, 120) AS label,
+          FORMAT(c.raised_at, 'dd MMM') AS label,
           SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL OR GETDATE() > c.warehouse_team_deadline THEN 1 ELSE 0 END) AS breachCount
         FROM Complaints c
         WHERE c.warehouse_id = @warehouseId ${dateClauseTrend}
-        GROUP BY CONVERT(VARCHAR(10), c.raised_at, 120)
-        ORDER BY label ASC
+        GROUP BY CONVERT(VARCHAR(10), c.raised_at, 120), FORMAT(c.raised_at, 'dd MMM')
+        ORDER BY CONVERT(VARCHAR(10), c.raised_at, 120) ASC
       `;
     } else {
       trendQuery = `
         SELECT 
-          ('Week ' + CAST(DATEPART(week, c.raised_at) AS VARCHAR)) AS label,
+          CASE 
+            WHEN FORMAT(MIN(c.raised_at), 'dd MMM') = FORMAT(MAX(c.raised_at), 'dd MMM') 
+            THEN FORMAT(MIN(c.raised_at), 'dd MMM')
+            ELSE FORMAT(MIN(c.raised_at), 'dd MMM') + ' – ' + FORMAT(MAX(c.raised_at), 'dd MMM')
+          END AS label,
           SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL OR GETDATE() > c.warehouse_team_deadline THEN 1 ELSE 0 END) AS breachCount
         FROM Complaints c
         WHERE c.warehouse_id = @warehouseId ${dateClauseTrend}
-        GROUP BY DATEPART(week, c.raised_at)
+        GROUP BY DATEPART(year, c.raised_at), DATEPART(week, c.raised_at)
         ORDER BY MIN(c.raised_at) ASC
       `;
     }
     const trendRes = await reqTrend.query(trendQuery);
 
-    // 6. Detailed Complaints Table for Warehouse
+    // 6. Open Complaint Aging Buckets
+    const reqAging = pool.request();
+    reqAging.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
+    const dateClauseAging = this.getDateRangeClause(period, startDate, endDate, reqAging, 'c');
+    const agingQuery = `
+      SELECT 
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) <= 24 THEN 1 ELSE 0 END) AS bucketLessThan24h,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 24 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 72 THEN 1 ELSE 0 END) AS bucket1To3Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 72 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 168 THEN 1 ELSE 0 END) AS bucket4To7Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 168 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 336 THEN 1 ELSE 0 END) AS bucket8To14Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 336 THEN 1 ELSE 0 END) AS bucket15PlusDays
+      FROM Complaints c
+      WHERE c.warehouse_id = @warehouseId 
+        AND c.status NOT IN ('Resolved', 'Completed', 'Closed') ${dateClauseAging}
+    `;
+    const agingRes = await reqAging.query(agingQuery);
+    const ag = agingRes.recordset[0] || {};
+    const agingBuckets = [
+      { bucket: '< 1 Day', count: ag.bucketLessThan24h || 0 },
+      { bucket: '1-3 Days', count: ag.bucket1To3Days || 0 },
+      { bucket: '4-7 Days', count: ag.bucket4To7Days || 0 },
+      { bucket: '8-14 Days', count: ag.bucket8To14Days || 0 },
+      { bucket: '15+ Days', count: ag.bucket15PlusDays || 0 },
+    ];
+
+    // 7. Detailed Complaints Table for Warehouse
     const reqDetails = pool.request();
     reqDetails.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
     const dateClauseDetails = this.getDateRangeClause(period, startDate, endDate, reqDetails, 'c');
@@ -621,7 +749,7 @@ class ReportRepository {
         CASE WHEN c.status IN ('Resolved', 'Completed') THEN CONVERT(VARCHAR(20), c.updated_at, 106) ELSE 'N/A' END AS resolved_date
       FROM Complaints c
       JOIN Users u_sales ON c.sales_executive_id = u_sales.id
-      LEFT JOIN Users u_team ON c.taken_action_by = u_team.id
+      LEFT JOIN Users u_team ON u_team.id = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id)
       JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
       LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
       WHERE c.warehouse_id = @warehouseId ${dateClauseDetails}
@@ -635,6 +763,7 @@ class ReportRepository {
         pendingCount: s.pendingCount || 0,
         inProgressCount: s.inProgressCount || 0,
         resolvedCount: totalResolved,
+        openCount: s.openCount || 0,
         totalEscalated: totalEscalated,
         resolvedDirectlyByTeam: s.resolvedDirectlyByTeam || 0,
         escalationRate: escalationRate,
@@ -642,12 +771,24 @@ class ReportRepository {
         slaPerformanceRate: slaPerformanceRate
       },
       statusBreakdown: statusRes.recordset,
-      typeBreakdown: typeRes.recordset,
+      subtypeBreakdown: typeRes.recordset,
+      mostCommonIssue: this.calculateMostCommonIssue(typeRes.recordset),
       teamMemberPerformance: teamPerformance,
+      agingBuckets,
       slaBreachTrend: trendRes.recordset,
       trendGrouping: isShortRange ? 'daily' : 'weekly',
       detailedComplaints: detailsRes.recordset
     };
+  }
+
+  /**
+   * Unified Warehouse Report Dispatcher
+   */
+  async getWarehouseReport(userId, userRole, warehouseId, period, startDate, endDate) {
+    if (userRole === 'Warehouse Manager') {
+      return this.getWarehouseManagerReport(warehouseId, period, startDate, endDate);
+    }
+    return this.getWarehouseTeamReport(userId, warehouseId, period, startDate, endDate);
   }
 }
 

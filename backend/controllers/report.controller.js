@@ -1,6 +1,8 @@
+const RepositoryFactory = require('../repositories/repository.factory');
 const ReportRepository = require('../repositories/mssql/report.repository');
 
 const reportRepo = new ReportRepository();
+const userRepo = RepositoryFactory.getUserRepository();
 
 exports.getSalesExecutiveReport = async (req, res, next) => {
   try {
@@ -31,7 +33,11 @@ exports.getWarehouseTeamReport = async (req, res, next) => {
   try {
     const userRole = req.user?.role;
     const userId = req.user?.userId || req.user?.id;
-    const warehouseId = req.user?.warehouseId || req.user?.warehouse_id;
+    let warehouseId = req.user?.warehouseId || req.user?.warehouse_id;
+    if (!warehouseId && userId) {
+      const u = await userRepo.findById(userId);
+      warehouseId = u?.warehouse_id;
+    }
     if (userRole !== 'Warehouse Team' && userRole !== 'Administrator' && userRole !== 'Admin') {
       return res.status(403).json({
         success: false,
@@ -56,7 +62,12 @@ exports.getWarehouseTeamReport = async (req, res, next) => {
 exports.getWarehouseManagerReport = async (req, res, next) => {
   try {
     const userRole = req.user?.role;
-    const targetWarehouseId = req.user?.warehouseId || req.user?.warehouse_id || 1;
+    const userId = req.user?.userId || req.user?.id;
+    let targetWarehouseId = req.user?.warehouseId || req.user?.warehouse_id;
+    if (!targetWarehouseId && userId) {
+      const u = await userRepo.findById(userId);
+      targetWarehouseId = u?.warehouse_id;
+    }
     if (userRole !== 'Warehouse Manager' && userRole !== 'Manager' && userRole !== 'Administrator' && userRole !== 'Admin') {
       return res.status(403).json({
         success: false,
@@ -78,14 +89,38 @@ exports.getWarehouseManagerReport = async (req, res, next) => {
   }
 };
 
+exports.getWarehouseReport = async (req, res, next) => {
+  try {
+    const userRole = req.user?.role;
+    const userId = req.user?.userId || req.user?.id;
+    let warehouseId = req.user?.warehouseId || req.user?.warehouse_id;
+    if (!warehouseId && userId) {
+      const u = await userRepo.findById(userId);
+      warehouseId = u?.warehouse_id;
+    }
+
+    const { period = 'month', startDate, endDate } = req.query;
+    const reportData = await reportRepo.getWarehouseReport(userId, userRole, warehouseId, period, startDate, endDate);
+
+    return res.status(200).json({
+      success: true,
+      role: userRole,
+      period,
+      data: reportData
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Generic role-based auto-router
 exports.getReportData = async (req, res, next) => {
   try {
-    const { role: userRole } = req.user;
+    const userRole = req.user?.role;
     if (userRole === 'Sales Executive') {
       return exports.getSalesExecutiveReport(req, res, next);
-    } else if (userRole === 'Warehouse Team') {
-      return exports.getWarehouseTeamReport(req, res, next);
+    } else if (userRole === 'Warehouse Manager' || userRole === 'Warehouse Team') {
+      return exports.getWarehouseReport(req, res, next);
     } else {
       return exports.getWarehouseManagerReport(req, res, next);
     }
