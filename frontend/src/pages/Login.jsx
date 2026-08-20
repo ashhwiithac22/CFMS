@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
-import { Eye, EyeOff, Lock, Mail, User, Shield, Briefcase, Check } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, User, ShieldCheck, Briefcase, Check, Clock, GitBranch } from 'lucide-react';
 import ThemeToggle from '../components/common/ThemeToggle';
 import Button from '../components/common/Button';
 import CustomSelect from '../components/common/CustomSelect';
@@ -163,90 +163,107 @@ const Login = () => {
         <ThemeToggle />
       </div>
 
-      {/* LEFT PANEL — Deep Charcoal & Unified Primary Blue Hero Panel (Visible >=768px) */}
+      {/* LEFT PANEL — Concrete Spec Redesign */}
       <div className="auth-hero-panel">
-        {/* Subtle Ambient Blue Backdrop (Single Accent Color) */}
-        <div className="absolute inset-0 w-full h-full opacity-20 pointer-events-none overflow-hidden">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-            <defs>
-              <radialGradient id="hero-grad-blue" cx="50%" cy="30%" r="70%">
-                <stop offset="0%" stopColor="#1E4FD9" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#0D1117" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hero-grad-blue)" />
-            <path d="M-100 200 C 200 100, 300 400, 800 200" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
-            <path d="M-50 400 C 300 300, 400 600, 900 400" fill="none" stroke="rgba(30,79,217,0.15)" strokeWidth="2" />
-          </svg>
-        </div>
 
-        {/* TOP BRANDING — Horizontally Centered at Top with modest font size scaling */}
+        {/* TOP BRANDING — Reduced top space, 40x40px badge, tight text */}
         <div className="auth-hero-branding">
           <div 
             style={{ 
-              width: '50px', 
-              height: '50px', 
-              borderRadius: '14px', 
-              backgroundColor: 'var(--color-primary)', 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '10px', 
+              backgroundColor: '#3B5FE0', 
               color: '#FFFFFF', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center', 
-              fontWeight: 'bold', 
-              fontSize: '21px',
-              boxShadow: '0 4px 14px rgba(30, 79, 217, 0.4)',
+              fontWeight: 500, 
+              fontSize: '14px',
               flexShrink: 0
             }}
           >
             RC
           </div>
-          <div>
-            <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#FFFFFF', margin: 0, lineHeight: 1.2 }}>CFMS Portal</h2>
-            <p style={{ fontSize: '13.5px', color: '#93C5FD', margin: 0, fontWeight: '500' }}>Customer Feedback Management System</p>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 500, color: '#F4F5F7', margin: 0, lineHeight: 1.2, letterSpacing: '-0.01em' }}>
+              CFMS Portal
+            </h2>
+            <p style={{ fontSize: '12.5px', color: '#8B93A3', margin: 0, marginTop: '1px', fontWeight: 400 }}>
+              Customer Feedback Management
+            </p>
           </div>
         </div>
 
-        {/* MIDDLE CONTENT — Vertically Centered */}
-        <div className="auth-hero-content">
-          <div 
-            style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              padding: '7px 16px', 
-              borderRadius: '9999px', 
-              backgroundColor: 'rgba(30, 79, 217, 0.15)', 
-              border: '1px solid rgba(96, 165, 250, 0.3)', 
-              color: '#93C5FD', 
-              fontSize: '13px', 
-              fontWeight: '600',
-              marginBottom: '20px'
-            }}
-          >
-            <Shield size={15} style={{ color: '#60A5FA' }} />
-            <span>Enterprise SLA & Escalation Governance</span>
+        {/* MIDDLE CONTENT */}
+        <div className="auth-hero-content text-left">
+          {/* Quieter Pill Badge */}
+          <div className="mb-6 flex justify-start">
+            <div 
+              style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                padding: '5px 12px', 
+                borderRadius: '9999px', 
+                backgroundColor: 'rgba(59, 95, 224, 0.08)', 
+                border: '0.5px solid #2A3550', 
+                color: '#A9BDF0', 
+                fontSize: '11.5px', 
+                fontWeight: 500
+              }}
+            >
+              <ShieldCheck size={16} style={{ color: '#7BA1F5' }} />
+              <span>Enterprise SLA & Escalation Governance</span>
+            </div>
           </div>
 
-          <h1 style={{ fontSize: '32px', fontWeight: '800', color: '#FFFFFF', lineHeight: 1.25, letterSpacing: '-0.5px', margin: 0 }}>
-            Complaint Lifecycle <br />
-            <span style={{ background: 'linear-gradient(90deg, #60A5FA 0%, #93C5FD 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Automation & Escalation
-            </span>
+          {/* Headline */}
+          <h1 style={{ fontSize: '38px', fontWeight: 500, lineHeight: 1.15, letterSpacing: '-0.02em', margin: 0 }}>
+            <span style={{ color: '#F4F5F7' }}>Complaint lifecycle</span> <br />
+            <span style={{ color: '#6690F2' }}>automation and escalation</span>
           </h1>
 
-          <p style={{ fontSize: '14px', color: '#E2E8F0', marginTop: '16px', lineHeight: 1.6, maxWidth: '400px' }}>
+          {/* Body Text */}
+          <p style={{ fontSize: '14px', color: '#8B93A3', lineHeight: 1.6, maxWidth: '400px', marginTop: '18px' }}>
             Track, escalate, and resolve customer feedback across all warehouses — all in one unified, real-time platform.
           </p>
 
-          {/* Metric Badges */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginTop: '32px', maxWidth: '420px' }}>
-            <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-              <div style={{ fontSize: '12px', color: '#60A5FA', fontWeight: '600', marginBottom: '4px' }}>Real-Time SLA</div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#FFFFFF' }}>24h Auto-Escalation</div>
-            </div>
-            <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-              <div style={{ fontSize: '12px', color: '#60A5FA', fontWeight: '600', marginBottom: '4px' }}>Role Oversight</div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#FFFFFF' }}>Multi-Warehouse Analytics</div>
+          {/* Feature Cards — Single Bordered Container with Internal 1px Divider */}
+          <div 
+            style={{ 
+              marginTop: '32px', 
+              maxWidth: '420px', 
+              borderRadius: '12px', 
+              border: '0.5px solid #2A3550', 
+              backgroundColor: '#1C2230', 
+              overflow: 'hidden' 
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1px' }}>
+              
+              {/* Card 1 */}
+              <div style={{ backgroundColor: '#0D1119', padding: '18px 20px', display: 'flex', flexDirection: 'column' }}>
+                <Clock size={18} style={{ color: '#6690F2' }} />
+                <div style={{ fontSize: '11px', color: '#6690F2', fontWeight: 500, marginTop: '10px' }}>
+                  Real-time SLA
+                </div>
+                <div style={{ fontSize: '14px', color: '#F4F5F7', fontWeight: 500, marginTop: '2px' }}>
+                  24h auto-escalation
+                </div>
+              </div>
+
+              {/* Card 2 */}
+              <div style={{ backgroundColor: '#0D1119', padding: '18px 20px', display: 'flex', flexDirection: 'column' }}>
+                <GitBranch size={18} style={{ color: '#6690F2' }} />
+                <div style={{ fontSize: '11px', color: '#6690F2', fontWeight: 500, marginTop: '10px' }}>
+                  Role oversight
+                </div>
+                <div style={{ fontSize: '14px', color: '#F4F5F7', fontWeight: 500, marginTop: '2px' }}>
+                  Automated approval routing
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -258,7 +275,7 @@ const Login = () => {
         </div>
       </div>
 
-      {/* RIGHT PANEL — Form Panel */}
+      {/* RIGHT PANEL — Form Panel (UNTOUCHED) */}
       <div className="auth-form-panel">
         <div className="auth-form-card">
           

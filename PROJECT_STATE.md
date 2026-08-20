@@ -321,25 +321,26 @@ Below is the SQL Server schema defining the tables and relations:
   - *Note*: These 5 records are test/seed entries (`CUST-TEST-*`, synthetic test data). The corrections were database data cleanup, not changes to real production complaint history.
   - *Future Seed Script Recommendation*: All future test/seed generator scripts and mock data ingestion pipelines MUST enforce timestamp sequence validation (`raised_at < warehouse_team_deadline <= warehouse_team_responded_at / escalated_to_manager_at`) prior to SQL insertion to prevent data corruption.
 ### 2026-08-20
+- **Left Hero Panel Concrete Spec Redesign (`Login.jsx`)**:
+  - **Panel Layout & Background**: Set max-width `520px`, padding `56px 48px`, background `#0A0D12`. Reduced top space above logo block.
+  - **Logo Block**: 40x40px badge with 10px radius (`#3B5FE0`), 14px white "RC" text; 17px "CFMS Portal" heading; 12.5px subtitle ("Customer Feedback Management") tight beneath.
+  - **Badge Pill**: Quieter `5px 12px` pill badge with `0.5px solid #2A3550` border, `rgba(59,95,224,0.08)` background, 16px `ShieldCheck` icon (`#7BA1F5`), and 11.5px text (`#A9BDF0`).
+  - **Headline & Color Break**: 38px font weight 500, line-height 1.15; Line 1 in `#F4F5F7` ("Complaint lifecycle"), Line 2 in `#6690F2` ("automation and escalation").
+  - **Feature Cards**: Single seamless container (`0.5px solid #2A3550`, `#1C2230` background) wrapping a 2-column grid (`#0D1119` cards, `18px 20px` padding) with internal 1px divider gap.
+    - Card 1: `Clock` icon (`#6690F2`), 11px label "Real-time SLA", 14px value "24h auto-escalation".
+    - Card 2: `GitBranch` icon (`#6690F2`), 11px label "Role oversight", 14px value "Automated approval routing".
+  - **Right Form Panel Intact**: Preserved the right-side Sign In form 100% untouched.
 - **Split-Screen Login/Register UI Redesign & SMTP Resilience**:
   - **SMTP Resilience & Timeout Improvement (`mailer.js` & `auth.service.js`)**:
     - **Port 587 STARTTLS Configuration**: Updated `mailer.js` to explicitly connect via `smtp.gmail.com:587` with STARTTLS instead of forcing `service: 'gmail'` (which defaults to port 465 SSL/TLS).
     - **8-Second Timeout Guards**: Added `connectionTimeout: 8000`, `greetingTimeout: 8000`, and `socketTimeout: 8000` to prevent Nodemailer from hanging for 21+ seconds on connection failure.
     - **User-Facing Error Message**: Added graceful error handling in `auth.service.js` returning a clear message (*"We couldn't send the verification email right now. Please try again in a moment or contact support."*) instead of a generic HTTP 500 server error.
-  - **Hero Panel Branding Scaling (`Login.jsx`)**:
-    - Modestly increased font sizes for top branding block: "CFMS Portal" heading to `24px`, "Customer Feedback Management System" subtitle to `13.5px`, SLA governance badge to `13px`, and "RC" logo badge to `50px` square (`21px` font).
   - **Unified Primary Blue Accent & Minimal Deep Charcoal Palette**:
     - **Reverted Primary Submit Button**: Reverted the "Sign In" / "Create Account" button to use the exact app-wide primary blue token (`var(--color-primary)` / `#1E4FD9`), matching the primary buttons on Dashboard ("Take Action", "Complete", filter tabs) 100%.
     - **Single Accent Color Harmony**: Removed all orange, amber, green, and multi-color accents. All interactive and highlight elements (RC logo badge, SLA governance badge, "Automation & Escalation" headline highlight, feature card labels, active tab indicator) use the unified primary blue.
     - **Hero Background**: Clean deep charcoal slate background (`#0D1117` $\rightarrow$ `#161B22` $\rightarrow$ `#1A1F26`).
-    - **Top Color Bar Removed**: Zero floating decorative color bars or gradient blocks at the top of the panel.
-  - **Layout Alignment Fixes Preserved**:
-    - Repositioned top logo block (`.auth-hero-branding`) horizontally centered at the top of the hero panel with an explicit `16px` (`gap-4`) spacing between RC badge and text.
-    - Vertically centered middle content block (`.auth-hero-content`) with equal top and bottom breathing room. Anchored footer tagline at bottom.
   - **Social SSO Section Removed**: Completely removed the "Or continue with" divider line and Google/Apple placeholder buttons from both Sign In and Register forms.
   - **Right Form Panel (52–55% width)**: Clean, theme-aware form container centered on screen inside elevated `.auth-form-card`. Supports active tab switching between "Sign In" and "Create an account", rounded input fields with generous spacing, and "Forgot Password?" entry point.
-  - **Real-Time Password Complexity Checklist**:
-    - Embedded animated password complexity feedback checklist (`PasswordChecklist`) for Register flow showing real-time progress for 8+ chars, uppercase, digit, and special character requirements.
   - **Preserved Core Authentication Logic**:
     - 100% preservation of JWT login, signup metadata fetching (`/auth/metadata`), role & department selectors, and OTP forgot-password entry point (`/forgot-password`).
   - **Responsive & Theme Support**:
