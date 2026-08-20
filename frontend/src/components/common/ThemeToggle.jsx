@@ -31,7 +31,7 @@ const ThemeToggle = ({ className = '', style = {} }) => {
         boxSizing: 'border-box',
         ...style
       }}
-      className={className}
+      className={`theme-toggle-btn ${className}`}
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.div

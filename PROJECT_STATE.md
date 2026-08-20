@@ -320,10 +320,31 @@ Below is the SQL Server schema defining the tables and relations:
     5. **`CMP-0019`**: `warehouse_team_deadline` was 2 hours before `raised_at` $\rightarrow$ Set to `2026-08-12 10:19:28` (+24h SLA).
   - *Note*: These 5 records are test/seed entries (`CUST-TEST-*`, synthetic test data). The corrections were database data cleanup, not changes to real production complaint history.
   - *Future Seed Script Recommendation*: All future test/seed generator scripts and mock data ingestion pipelines MUST enforce timestamp sequence validation (`raised_at < warehouse_team_deadline <= warehouse_team_responded_at / escalated_to_manager_at`) prior to SQL insertion to prevent data corruption.
-- **Warehouse Breakdown Chart Rendering Fix (`Reports.jsx`)**:
-  - Diagnosed that Recharts default tick-skipping behavior automatically dropped middle X-axis labels on 320px column layouts when long warehouse names were drawn horizontally.
-  - Added `interval={0}`, `angle={-15}`, `textAnchor="end"`, `height={45}`, and `tickFormatter={(name) => name.replace(' Warehouse', '')}` to `XAxis` in [Reports.jsx](file:///d:/VII_Sem_Intern/Complaint_Lifecycle_Automation_and_Escalation/frontend/src/pages/Reports.jsx).
-  - Confirmed all 4 warehouses (**Tirupur**, **Coimbatore**, **Salem**, **Erode**) render clearly as separate bars and X-axis labels.
+### 2026-08-20
+- **Split-Screen Login/Register UI Redesign & SMTP Resilience**:
+  - **SMTP Resilience & Timeout Improvement (`mailer.js` & `auth.service.js`)**:
+    - **Port 587 STARTTLS Configuration**: Updated `mailer.js` to explicitly connect via `smtp.gmail.com:587` with STARTTLS instead of forcing `service: 'gmail'` (which defaults to port 465 SSL/TLS).
+    - **8-Second Timeout Guards**: Added `connectionTimeout: 8000`, `greetingTimeout: 8000`, and `socketTimeout: 8000` to prevent Nodemailer from hanging for 21+ seconds on connection failure.
+    - **User-Facing Error Message**: Added graceful error handling in `auth.service.js` returning a clear message (*"We couldn't send the verification email right now. Please try again in a moment or contact support."*) instead of a generic HTTP 500 server error.
+  - **Hero Panel Branding Scaling (`Login.jsx`)**:
+    - Modestly increased font sizes for top branding block: "CFMS Portal" heading to `24px`, "Customer Feedback Management System" subtitle to `13.5px`, SLA governance badge to `13px`, and "RC" logo badge to `50px` square (`21px` font).
+  - **Unified Primary Blue Accent & Minimal Deep Charcoal Palette**:
+    - **Reverted Primary Submit Button**: Reverted the "Sign In" / "Create Account" button to use the exact app-wide primary blue token (`var(--color-primary)` / `#1E4FD9`), matching the primary buttons on Dashboard ("Take Action", "Complete", filter tabs) 100%.
+    - **Single Accent Color Harmony**: Removed all orange, amber, green, and multi-color accents. All interactive and highlight elements (RC logo badge, SLA governance badge, "Automation & Escalation" headline highlight, feature card labels, active tab indicator) use the unified primary blue.
+    - **Hero Background**: Clean deep charcoal slate background (`#0D1117` $\rightarrow$ `#161B22` $\rightarrow$ `#1A1F26`).
+    - **Top Color Bar Removed**: Zero floating decorative color bars or gradient blocks at the top of the panel.
+  - **Layout Alignment Fixes Preserved**:
+    - Repositioned top logo block (`.auth-hero-branding`) horizontally centered at the top of the hero panel with an explicit `16px` (`gap-4`) spacing between RC badge and text.
+    - Vertically centered middle content block (`.auth-hero-content`) with equal top and bottom breathing room. Anchored footer tagline at bottom.
+  - **Social SSO Section Removed**: Completely removed the "Or continue with" divider line and Google/Apple placeholder buttons from both Sign In and Register forms.
+  - **Right Form Panel (52–55% width)**: Clean, theme-aware form container centered on screen inside elevated `.auth-form-card`. Supports active tab switching between "Sign In" and "Create an account", rounded input fields with generous spacing, and "Forgot Password?" entry point.
+  - **Real-Time Password Complexity Checklist**:
+    - Embedded animated password complexity feedback checklist (`PasswordChecklist`) for Register flow showing real-time progress for 8+ chars, uppercase, digit, and special character requirements.
+  - **Preserved Core Authentication Logic**:
+    - 100% preservation of JWT login, signup metadata fetching (`/auth/metadata`), role & department selectors, and OTP forgot-password entry point (`/forgot-password`).
+  - **Responsive & Theme Support**:
+    - Complete support for Light & Dark modes via `ThemeToggle` positioned top-right. Zero horizontal scrolling on mobile viewports (<768px).
+
 
 
 

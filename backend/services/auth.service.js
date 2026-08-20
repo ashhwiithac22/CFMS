@@ -195,7 +195,12 @@ class AuthService {
 
     await userRepo.setOtp(email, otp, otpExpiry);
 
-    await sendOtpMail(email, otp);
+    try {
+      await sendOtpMail(email, otp);
+    } catch (err) {
+      console.error(`[SMTP MAIL ERROR] Failed to deliver OTP email to ${email}:`, err.message);
+      throw new ValidationError("We couldn't send the verification email right now. Please try again in a moment or contact support.");
+    }
 
     await auditRepo.create({
       userId: user.id,

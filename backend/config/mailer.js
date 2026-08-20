@@ -23,28 +23,29 @@ async function getTransporter() {
     throw new Error(errMsg);
   }
 
-  const service = process.env.EMAIL_SERVICE || (emailUser.endsWith('@gmail.com') ? 'gmail' : undefined);
-  const host = process.env.EMAIL_HOST || (service ? undefined : 'smtp.gmail.com');
+  const maskedUser = emailUser ? `${emailUser.slice(0, 2)}***${emailUser.slice(emailUser.indexOf('@'))}` : 'none';
+  const maskedPass = emailPass ? `${emailPass.slice(0, 2)}***${emailPass.slice(-2)} (len: ${emailPass.length})` : 'none';
+  console.log(`[SMTP CONFIG LOADED] User: ${maskedUser} | Pass: ${maskedPass}`);
+
+  const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.EMAIL_PORT, 10) || 587;
   const isSecure = process.env.EMAIL_SECURE === 'true' || port === 465;
 
   const transportConfig = {
+    host,
+    port,
+    secure: isSecure,
     auth: {
       user: emailUser,
       pass: emailPass,
     },
+    connectionTimeout: 8000, // 8 seconds timeout
+    greetingTimeout: 8000,   // 8 seconds timeout
+    socketTimeout: 8000,     // 8 seconds timeout
     tls: {
       rejectUnauthorized: false
     }
   };
-
-  if (service) {
-    transportConfig.service = service;
-  } else {
-    transportConfig.host = host;
-    transportConfig.port = port;
-    transportConfig.secure = isSecure;
-  }
 
   transporter = nodemailer.createTransport(transportConfig);
   return transporter;
