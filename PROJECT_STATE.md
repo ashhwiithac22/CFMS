@@ -321,6 +321,12 @@ Below is the SQL Server schema defining the tables and relations:
   - *Note*: These 5 records are test/seed entries (`CUST-TEST-*`, synthetic test data). The corrections were database data cleanup, not changes to real production complaint history.
   - *Future Seed Script Recommendation*: All future test/seed generator scripts and mock data ingestion pipelines MUST enforce timestamp sequence validation (`raised_at < warehouse_team_deadline <= warehouse_team_responded_at / escalated_to_manager_at`) prior to SQL insertion to prevent data corruption.
 ### 2026-08-20
+- **Warehouse Manager Report Audit & Manager Action Queue Implementation (`report.repository.js` & `Reports.jsx`)**:
+  - **Audit Findings**: Completed 6-point audit. Identified that item #3 ("Manager's own action queue") was missing from both API payload and UI view.
+  - **Built Manager Action Queue (Item #3)**: Added SQL Query 8 to `getWarehouseManagerReport` fetching escalated, unresolved complaints (`escalated_to_manager_at IS NOT NULL AND status NOT IN ('Resolved','Completed','Closed')`), sorted oldest first (`ORDER BY c.escalated_to_manager_at ASC`). Includes `complaint_number`, `customer_code`, `invoice_number`, `type/subtype`, `escalatedFrom` (team member), `escalatedDate`, `waitingTimeDisplay` (`DATEDIFF(minute)`), and `status`.
+  - **UI Prominence & Empty State**: Positioned `Manager Action Queue` near the top of the report page directly below the summary cards. If queue count is zero, renders a clean positive card: *"Zero Pending Escalations — All escalated complaints in this warehouse have been addressed."*
+  - **Single-Attribution Query Audit**: Audited all 8 queries in `getWarehouseManagerReport`. Confirmed 100% adherence to single-attribution logic `ISNULL(c.taken_action_by, c.assigned_warehouse_team_id)`. Zero `OR`-based matching.
+  - **Multi-Warehouse SQL Verification**: Verified numbers across all 4 warehouse managers (Coimbatore Manager: 2 pending escalations, Chennai Manager: 0, Tirupur Manager: 0, Salem Manager: 0). Captured Playwright Chrome screenshots `coimbatore_manager_action_queue_report.png` and `chennai_manager_empty_action_queue_report.png`.
 - **Left Hero Panel Concrete Spec Redesign (`Login.jsx`)**:
   - **Panel Layout & Background**: Set max-width `520px`, padding `56px 48px`, background `#0A0D12`. Reduced top space above logo block.
   - **Logo Block**: 40x40px badge with 10px radius (`#3B5FE0`), 14px white "RC" text; 17px "CFMS Portal" heading; 12.5px subtitle ("Customer Feedback Management") tight beneath.

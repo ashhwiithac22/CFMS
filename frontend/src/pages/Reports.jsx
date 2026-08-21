@@ -707,7 +707,79 @@ const Reports = () => {
                   <StatSummaryCard title="Most Common Issue in Warehouse" value={reportData.mostCommonIssue?.display || 'N/A'} icon={<AlertCircle size={18} />} color="amber" />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                {/* Manager's Action Queue — Escalated & Pending Resolution */}
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', margin: '20px 0 0 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <ShieldAlert size={18} style={{ color: '#EF4444' }} />
+                      Manager Action Queue (Escalated & Pending Action)
+                    </h3>
+                    <span 
+                      style={{ 
+                        fontSize: '12px', 
+                        fontWeight: '600', 
+                        padding: '4px 10px', 
+                        borderRadius: '12px', 
+                        backgroundColor: (reportData.managerActionQueue || []).length > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', 
+                        color: (reportData.managerActionQueue || []).length > 0 ? '#EF4444' : '#10B981' 
+                      }}
+                    >
+                      {(reportData.managerActionQueue || []).length} Pending Escalation{(reportData.managerActionQueue || []).length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  {(reportData.managerActionQueue || []).length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px border-dashed var(--border-color)' }}>
+                      <CheckCircle2 size={32} style={{ color: '#10B981', margin: '0 auto 8px auto' }} />
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#10B981' }}>
+                        Zero Pending Escalations
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        All escalated complaints in this warehouse have been addressed. No items waiting in your queue!
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }} className="scrollbar-thin">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left', minWidth: '750px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                            <th style={{ padding: '10px' }}>Complaint ID</th>
+                            <th style={{ padding: '10px' }}>Customer</th>
+                            <th style={{ padding: '10px' }}>Invoice</th>
+                            <th style={{ padding: '10px' }}>Type / Subtype</th>
+                            <th style={{ padding: '10px' }}>Escalated From</th>
+                            <th style={{ padding: '10px' }}>Escalated Date</th>
+                            <th style={{ padding: '10px' }}>Waiting Time</th>
+                            <th style={{ padding: '10px' }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.managerActionQueue || []).map((item) => (
+                            <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '10px', fontWeight: '700', color: 'var(--brand-primary)' }}>{item.complaint_number}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-primary)' }}>{item.customer_code}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{item.invoice_number}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-primary)' }}>
+                                <span style={{ fontWeight: '500' }}>{item.type}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>{item.subtype}</span>
+                              </td>
+                              <td style={{ padding: '10px', fontWeight: '600', color: 'var(--text-primary)' }}>{item.escalatedFrom}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{item.escalatedDate}</td>
+                              <td style={{ padding: '10px', fontWeight: '700', color: '#EF4444' }}>{item.waitingTimeDisplay}</td>
+                              <td style={{ padding: '10px' }}>
+                                <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444' }}>
+                                  {item.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '20px' }}>
                   {/* Status Breakdown */}
                   <ChartCard title="Complaint Status Breakdown">
                     {reportData.statusBreakdown && reportData.statusBreakdown.length > 0 ? (
@@ -904,9 +976,10 @@ const DetailedComplaintsSection = ({ complaints, role }) => {
               <th style={{ padding: '10px' }}>Invoice</th>
               <th style={{ padding: '10px' }}>Type / Subtype</th>
               {role !== 'Sales Executive' && <th style={{ padding: '10px' }}>Raised By</th>}
-              {role === 'Warehouse Manager' && <th style={{ padding: '10px' }}>Claimed By</th>}
+              {role === 'Warehouse Manager' && <th style={{ padding: '10px' }}>Claimed / Handled By</th>}
               {role === 'Sales Executive' && <th style={{ padding: '10px' }}>Warehouse</th>}
               <th style={{ padding: '10px' }}>Raised Date</th>
+              {role === 'Warehouse Manager' && <th style={{ padding: '10px' }}>Escalated Date</th>}
               <th style={{ padding: '10px' }}>Status</th>
               <th style={{ padding: '10px' }}>Resolved Date</th>
             </tr>
@@ -914,7 +987,7 @@ const DetailedComplaintsSection = ({ complaints, role }) => {
           <tbody>
             {complaints.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <td colSpan={11} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                   No complaints found for the selected date range.
                 </td>
               </tr>
@@ -932,6 +1005,7 @@ const DetailedComplaintsSection = ({ complaints, role }) => {
                   {role === 'Warehouse Manager' && <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{c.claimedBy}</td>}
                   {role === 'Sales Executive' && <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{c.warehouse_name}</td>}
                   <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{c.raised_date}</td>
+                  {role === 'Warehouse Manager' && <td style={{ padding: '10px', color: c.escalated_date ? '#EF4444' : 'var(--text-muted)' }}>{c.escalated_date || 'N/A'}</td>}
                   <td style={{ padding: '10px' }}>
                     <span 
                       style={{

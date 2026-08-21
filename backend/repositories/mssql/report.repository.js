@@ -746,6 +746,7 @@ class ReportRepository {
         CONVERT(VARCHAR(30), c.raised_at, 126) AS raised_at_iso,
         c.status,
         CASE WHEN c.escalated_to_manager_at IS NOT NULL THEN 'Yes' ELSE 'No' END AS isEscalated,
+        CONVERT(VARCHAR(20), c.escalated_to_manager_at, 106) AS escalated_date,
         CASE WHEN c.status IN ('Resolved', 'Completed') THEN CONVERT(VARCHAR(20), c.updated_at, 106) ELSE 'N/A' END AS resolved_date
       FROM Complaints c
       JOIN Users u_sales ON c.sales_executive_id = u_sales.id
@@ -757,6 +758,39 @@ class ReportRepository {
     `;
     const detailsRes = await reqDetails.query(detailsQuery);
 
+    // 8. Manager Action Queue — Escalated & Still Unresolved (Sorted Oldest First)
+    const reqQueue = pool.request();
+    reqQueue.input('warehouseId', sql.Int, parseInt(warehouseId || 0, 10));
+    const dateClauseQueue = this.getDateRangeClause(period, startDate, endDate, reqQueue, 'c');
+    const queueQuery = `
+      SELECT 
+        c.id,
+        c.complaint_number,
+        c.customer_code,
+        c.invoice_number,
+        ct.name AS type,
+        ISNULL(cs.name, 'General') AS subtype,
+        (u_sales.first_name + ' ' + u_sales.last_name) AS raisedBy,
+        ISNULL(u_team.first_name + ' ' + u_team.last_name, 'Unassigned') AS escalatedFrom,
+        CONVERT(VARCHAR(20), c.escalated_to_manager_at, 106) AS escalatedDate,
+        DATEDIFF(minute, c.escalated_to_manager_at, GETDATE()) AS waitingMinutes,
+        c.status
+      FROM Complaints c
+      JOIN Users u_sales ON c.sales_executive_id = u_sales.id
+      LEFT JOIN Users u_team ON u_team.id = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id)
+      JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
+      LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
+      WHERE c.warehouse_id = @warehouseId 
+        AND c.escalated_to_manager_at IS NOT NULL
+        AND c.status NOT IN ('Resolved', 'Completed', 'Closed') ${dateClauseQueue}
+      ORDER BY c.escalated_to_manager_at ASC
+    `;
+    const queueRes = await reqQueue.query(queueQuery);
+    const managerActionQueue = queueRes.recordset.map(row => ({
+      ...row,
+      waitingTimeDisplay: this.formatDuration(row.waitingMinutes)
+    }));
+
     return {
       summary: {
         totalComplaints: totalComplaints,
@@ -765,11 +799,13 @@ class ReportRepository {
         resolvedCount: totalResolved,
         openCount: s.openCount || 0,
         totalEscalated: totalEscalated,
+        unresolvedEscalatedCount: managerActionQueue.length,
         resolvedDirectlyByTeam: s.resolvedDirectlyByTeam || 0,
         escalationRate: escalationRate,
         avgEscalatedResolutionHours: parseFloat(avgEscalatedResolutionHours),
         slaPerformanceRate: slaPerformanceRate
       },
+      managerActionQueue,
       statusBreakdown: statusRes.recordset,
       subtypeBreakdown: typeRes.recordset,
       mostCommonIssue: this.calculateMostCommonIssue(typeRes.recordset),
