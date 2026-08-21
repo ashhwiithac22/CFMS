@@ -113,11 +113,37 @@ exports.getWarehouseReport = async (req, res, next) => {
   }
 };
 
+exports.getAdminReport = async (req, res, next) => {
+  try {
+    const userRole = req.user?.role;
+    if (userRole !== 'Administrator' && userRole !== 'Admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Endpoint restricted to Administrators.'
+      });
+    }
+
+    const { period = 'month', startDate, endDate } = req.query;
+    const reportData = await reportRepo.getAdminReport(period, startDate, endDate);
+
+    return res.status(200).json({
+      success: true,
+      role: 'Administrator',
+      period,
+      data: reportData
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Generic role-based auto-router
 exports.getReportData = async (req, res, next) => {
   try {
     const userRole = req.user?.role;
-    if (userRole === 'Sales Executive') {
+    if (userRole === 'Administrator' || userRole === 'Admin') {
+      return exports.getAdminReport(req, res, next);
+    } else if (userRole === 'Sales Executive') {
       return exports.getSalesExecutiveReport(req, res, next);
     } else if (userRole === 'Warehouse Manager' || userRole === 'Warehouse Team') {
       return exports.getWarehouseReport(req, res, next);

@@ -826,6 +826,373 @@ class ReportRepository {
     }
     return this.getWarehouseTeamReport(userId, warehouseId, period, startDate, endDate);
   }
+
+  /**
+   * 4. Admin Report: Global Cross-Warehouse Executive Dashboard
+   * Organization-wide oversight across all warehouses, sales executives, and global escalations.
+   */
+  async getAdminReport(period, startDate, endDate) {
+    const pool = getPool();
+
+    // 1. Organization-Wide Summary Numbers
+    const reqSummary = pool.request();
+    const dateClauseSummary = this.getDateRangeClause(period, startDate, endDate, reqSummary, 'c');
+    const summaryQuery = `
+      SELECT 
+        COUNT(*) AS totalComplaints,
+        SUM(CASE WHEN c.status IN ('Pending', 'Assigned', 'New') THEN 1 ELSE 0 END) AS pendingCount,
+        SUM(CASE WHEN c.status = 'In Progress' THEN 1 ELSE 0 END) AS inProgressCount,
+        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') THEN 1 ELSE 0 END) AS resolvedCount,
+        SUM(CASE WHEN c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS openCount,
+        SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL THEN 1 ELSE 0 END) AS totalEverEscalated,
+        SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL AND c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS currentlyEscalatedCount,
+        AVG(CASE 
+          WHEN c.status IN ('Resolved', 'Completed') 
+          THEN DATEDIFF(minute, c.raised_at, ISNULL(c.updated_at, GETDATE()))
+          ELSE NULL 
+        END) AS avgResolutionMinutes,
+        SUM(CASE 
+          WHEN c.status IN ('Resolved', 'Completed') AND DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24 THEN 1
+          WHEN c.status NOT IN ('Resolved', 'Completed', 'Closed') AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 24 THEN 1
+          ELSE 0 
+        END) AS compliantCount
+      FROM Complaints c
+      WHERE 1=1 ${dateClauseSummary}
+    `;
+    const summaryRes = await reqSummary.query(summaryQuery);
+    const s = summaryRes.recordset[0] || {};
+
+    const totalComplaints = s.totalComplaints || 0;
+    const totalEverEscalated = s.totalEverEscalated || 0;
+    const currentlyEscalatedCount = s.currentlyEscalatedCount || 0;
+    const totalResolved = s.resolvedCount || 0;
+    const historicalEscalationRate = totalComplaints > 0 ? Math.round((totalEverEscalated / totalComplaints) * 100) : 0;
+    const activeEscalationRate = totalComplaints > 0 ? Math.round((currentlyEscalatedCount / totalComplaints) * 100) : 0;
+    const avgResolutionDisplay = this.formatDuration(s.avgResolutionMinutes);
+    const slaPerformanceRate = totalComplaints > 0 ? Math.round(((s.compliantCount || 0) / totalComplaints) * 100) : 100;
+
+    // 2. Warehouse-vs-Warehouse Comparison Table
+    const reqWhComp = pool.request();
+    const dateClauseWhComp = this.getDateRangeClause(period, startDate, endDate, reqWhComp, 'c');
+    const whCompQuery = `
+      SELECT 
+        w.id AS warehouseId,
+        w.name AS warehouseName,
+        w.location,
+        COUNT(c.id) AS totalComplaints,
+        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') THEN 1 ELSE 0 END) AS resolvedCount,
+        SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL THEN 1 ELSE 0 END) AS totalEverEscalated,
+        SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL AND c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS currentlyEscalatedCount,
+        SUM(CASE WHEN c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS pendingCount,
+        AVG(CASE 
+          WHEN c.status IN ('Resolved', 'Completed') 
+          THEN DATEDIFF(minute, c.raised_at, ISNULL(c.updated_at, GETDATE()))
+          ELSE NULL 
+        END) AS avgResMinutes,
+        SUM(CASE 
+          WHEN c.status IN ('Resolved', 'Completed') AND DATEDIFF(hour, c.raised_at, ISNULL(c.updated_at, GETDATE())) <= 24 THEN 1
+          WHEN c.status NOT IN ('Resolved', 'Completed', 'Closed') AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 24 THEN 1
+          ELSE 0 
+        END) AS compliantCount
+      FROM Warehouses w
+      LEFT JOIN Complaints c ON w.id = c.warehouse_id ${dateClauseWhComp}
+      GROUP BY w.id, w.name, w.location
+      ORDER BY w.id ASC
+    `;
+    const whCompRes = await reqWhComp.query(whCompQuery);
+    const warehouseComparison = whCompRes.recordset.map(row => {
+      const total = row.totalComplaints || 0;
+      const resolved = row.resolvedCount || 0;
+      const currentlyEscalated = row.currentlyEscalatedCount || 0;
+      const everEscalated = row.totalEverEscalated || 0;
+      const compliant = row.compliantCount || 0;
+      const activeEscRate = total > 0 ? Math.round((currentlyEscalated / total) * 100) : 0;
+      const histEscRate = total > 0 ? Math.round((everEscalated / total) * 100) : 0;
+      const slaRate = total > 0 ? Math.round((compliant / total) * 100) : 100;
+      return {
+        warehouseId: row.warehouseId,
+        warehouseName: row.warehouseName,
+        location: row.location,
+        totalComplaints: total,
+        resolvedCount: resolved,
+        currentlyEscalatedCount: currentlyEscalated,
+        totalEverEscalated: everEscalated,
+        escalatedCount: currentlyEscalated,
+        pendingCount: row.pendingCount || 0,
+        activeEscalationRate: `${activeEscRate}%`,
+        historicalEscalationRate: `${histEscRate}%`,
+        escalationRate: `${activeEscRate}%`,
+        avgResolutionDisplay: this.formatDuration(row.avgResMinutes),
+        slaPerformance: `${slaRate}%`
+      };
+    });
+
+    // 3. Sales Executive Performance Breakdown
+    const reqSales = pool.request();
+    const dateClauseSales = this.getDateRangeClause(period, startDate, endDate, reqSales, 'c');
+    const salesQuery = `
+      SELECT 
+        u.id AS executiveId,
+        (u.first_name + ' ' + u.last_name) AS executiveName,
+        u.email,
+        COUNT(c.id) AS raisedCount,
+        SUM(CASE WHEN c.status IN ('Resolved', 'Completed') THEN 1 ELSE 0 END) AS resolvedCount,
+        SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL THEN 1 ELSE 0 END) AS totalEverEscalated,
+        SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL AND c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS currentlyEscalatedCount,
+        SUM(CASE WHEN c.status NOT IN ('Resolved', 'Completed', 'Closed') THEN 1 ELSE 0 END) AS pendingCount,
+        (
+          SELECT TOP 1 w2.name 
+          FROM Complaints c2 
+          JOIN Warehouses w2 ON c2.warehouse_id = w2.id 
+          WHERE c2.sales_executive_id = u.id ${dateClauseSales.replace(/c\./g, 'c2.')}
+          GROUP BY w2.name 
+          ORDER BY COUNT(*) DESC
+        ) AS primaryWarehouse
+      FROM Users u
+      LEFT JOIN Complaints c ON u.id = c.sales_executive_id ${dateClauseSales}
+      WHERE u.role = 'Sales Executive'
+      GROUP BY u.id, u.first_name, u.last_name, u.email
+      ORDER BY raisedCount DESC
+    `;
+    const salesRes = await reqSales.query(salesQuery);
+    const salesExecutivePerformance = salesRes.recordset.map(row => {
+      const raised = row.raisedCount || 0;
+      const resolved = row.resolvedCount || 0;
+      const currentlyEscalated = row.currentlyEscalatedCount || 0;
+      const everEscalated = row.totalEverEscalated || 0;
+      const resRate = raised > 0 ? Math.round((resolved / raised) * 100) : 0;
+      return {
+        executiveId: row.executiveId,
+        executiveName: row.executiveName,
+        email: row.email,
+        raisedCount: raised,
+        primaryWarehouse: row.primaryWarehouse || 'N/A',
+        resolvedCount: resolved,
+        currentlyEscalatedCount: currentlyEscalated,
+        totalEverEscalated: everEscalated,
+        escalatedCount: currentlyEscalated,
+        pendingCount: row.pendingCount || 0,
+        resolutionRate: `${resRate}%`
+      };
+    });
+
+    // 4. Global Escalation Oversight (Oldest First)
+    const reqGlobalQueue = pool.request();
+    const dateClauseGlobalQueue = this.getDateRangeClause(period, startDate, endDate, reqGlobalQueue, 'c');
+    const globalQueueQuery = `
+      SELECT 
+        c.id,
+        c.complaint_number,
+        c.customer_code,
+        c.invoice_number,
+        ct.name AS type,
+        ISNULL(cs.name, 'General') AS subtype,
+        w.name AS warehouseName,
+        ISNULL((
+          SELECT TOP 1 (u_mgr.first_name + ' ' + u_mgr.last_name) 
+          FROM Users u_mgr 
+          WHERE u_mgr.warehouse_id = c.warehouse_id AND u_mgr.role = 'Warehouse Manager'
+        ), 'Unassigned Manager') AS managerName,
+        (u_sales.first_name + ' ' + u_sales.last_name) AS raisedBy,
+        ISNULL(u_team.first_name + ' ' + u_team.last_name, 'Unassigned') AS escalatedFrom,
+        CONVERT(VARCHAR(20), c.escalated_to_manager_at, 106) AS escalatedDate,
+        DATEDIFF(minute, c.escalated_to_manager_at, GETDATE()) AS waitingMinutes,
+        c.status
+      FROM Complaints c
+      JOIN Warehouses w ON c.warehouse_id = w.id
+      JOIN Users u_sales ON c.sales_executive_id = u_sales.id
+      LEFT JOIN Users u_team ON u_team.id = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id)
+      JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
+      LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
+      WHERE c.escalated_to_manager_at IS NOT NULL
+        AND c.status NOT IN ('Resolved', 'Completed', 'Closed') ${dateClauseGlobalQueue}
+      ORDER BY c.escalated_to_manager_at ASC
+    `;
+    const globalQueueRes = await reqGlobalQueue.query(globalQueueQuery);
+    const globalEscalationQueue = globalQueueRes.recordset.map(row => ({
+      ...row,
+      waitingTimeDisplay: this.formatDuration(row.waitingMinutes)
+    }));
+
+    // 5. Org-Wide Trend & Pattern Analysis
+    const isShortRange = period === 'today' || period === 'week';
+
+    // Status Breakdown
+    const reqStatus = pool.request();
+    const dateClauseStatus = this.getDateRangeClause(period, startDate, endDate, reqStatus, 'c');
+    const statusQuery = `
+      SELECT 
+        c.status AS name, 
+        COUNT(*) AS value,
+        CAST(ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM Complaints c2 WHERE 1=1 ${dateClauseStatus.replace(/c\./g, 'c2.')}), 0), 1) AS FLOAT) AS percentage
+      FROM Complaints c
+      WHERE 1=1 ${dateClauseStatus}
+      GROUP BY c.status
+    `;
+    const statusRes = await reqStatus.query(statusQuery);
+
+    // Subtype Breakdown
+    const reqType = pool.request();
+    const dateClauseType = this.getDateRangeClause(period, startDate, endDate, reqType, 'c');
+    const typeQuery = `
+      SELECT 
+        ct.name AS typeName,
+        CASE 
+          WHEN cs.name IS NOT NULL AND cs.name <> 'General' THEN cs.name
+          ELSE 'General (' + ct.name + ')'
+        END AS subtypeName,
+        COUNT(*) AS count
+      FROM Complaints c
+      JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
+      LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
+      WHERE 1=1 ${dateClauseType}
+      GROUP BY ct.name, cs.name
+      ORDER BY count DESC
+    `;
+    const typeRes = await reqType.query(typeQuery);
+
+    // SLA Breach Trend
+    const reqTrend = pool.request();
+    const dateClauseTrend = this.getDateRangeClause(period, startDate, endDate, reqTrend, 'c');
+    let trendQuery = '';
+    if (isShortRange) {
+      trendQuery = `
+        SELECT 
+          FORMAT(c.raised_at, 'dd MMM') AS label,
+          SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL OR GETDATE() > c.warehouse_team_deadline THEN 1 ELSE 0 END) AS breachCount
+        FROM Complaints c
+        WHERE 1=1 ${dateClauseTrend}
+        GROUP BY CONVERT(VARCHAR(10), c.raised_at, 120), FORMAT(c.raised_at, 'dd MMM')
+        ORDER BY CONVERT(VARCHAR(10), c.raised_at, 120) ASC
+      `;
+    } else {
+      trendQuery = `
+        SELECT 
+          CASE 
+            WHEN FORMAT(MIN(c.raised_at), 'dd MMM') = FORMAT(MAX(c.raised_at), 'dd MMM') 
+            THEN FORMAT(MIN(c.raised_at), 'dd MMM')
+            ELSE FORMAT(MIN(c.raised_at), 'dd MMM') + ' – ' + FORMAT(MAX(c.raised_at), 'dd MMM')
+          END AS label,
+          SUM(CASE WHEN c.escalated_to_manager_at IS NOT NULL OR GETDATE() > c.warehouse_team_deadline THEN 1 ELSE 0 END) AS breachCount
+        FROM Complaints c
+        WHERE 1=1 ${dateClauseTrend}
+        GROUP BY DATEPART(year, c.raised_at), DATEPART(week, c.raised_at)
+        ORDER BY MIN(c.raised_at) ASC
+      `;
+    }
+    const trendRes = await reqTrend.query(trendQuery);
+
+    // Aging Buckets
+    const reqAging = pool.request();
+    const dateClauseAging = this.getDateRangeClause(period, startDate, endDate, reqAging, 'c');
+    const agingQuery = `
+      SELECT 
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) <= 24 THEN 1 ELSE 0 END) AS bucketLessThan24h,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 24 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 72 THEN 1 ELSE 0 END) AS bucket1To3Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 72 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 168 THEN 1 ELSE 0 END) AS bucket4To7Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 168 AND DATEDIFF(hour, c.raised_at, GETDATE()) <= 336 THEN 1 ELSE 0 END) AS bucket8To14Days,
+        SUM(CASE WHEN DATEDIFF(hour, c.raised_at, GETDATE()) > 336 THEN 1 ELSE 0 END) AS bucket15PlusDays
+      FROM Complaints c
+      WHERE c.status NOT IN ('Resolved', 'Completed', 'Closed') ${dateClauseAging}
+    `;
+    const agingRes = await reqAging.query(agingQuery);
+    const ag = agingRes.recordset[0] || {};
+    const agingBuckets = [
+      { bucket: '< 1 Day', count: ag.bucketLessThan24h || 0 },
+      { bucket: '1-3 Days', count: ag.bucket1To3Days || 0 },
+      { bucket: '4-7 Days', count: ag.bucket4To7Days || 0 },
+      { bucket: '8-14 Days', count: ag.bucket8To14Days || 0 },
+      { bucket: '15+ Days', count: ag.bucket15PlusDays || 0 },
+    ];
+
+    // 6. User & Role Management Visibility
+    const userRoleQuery = `
+      SELECT 
+        u.role,
+        COUNT(*) AS totalUsers,
+        SUM(CASE WHEN u.status = 'Active' THEN 1 ELSE 0 END) AS activeUsers,
+        SUM(CASE WHEN u.status <> 'Active' THEN 1 ELSE 0 END) AS inactiveUsers
+      FROM Users u
+      GROUP BY u.role
+    `;
+    const userRoleRes = await pool.request().query(userRoleQuery);
+
+    const warehouseUserQuery = `
+      SELECT 
+        w.name AS warehouseName,
+        SUM(CASE WHEN u.role = 'Warehouse Team' THEN 1 ELSE 0 END) AS teamMemberCount,
+        SUM(CASE WHEN u.role = 'Warehouse Manager' THEN 1 ELSE 0 END) AS managerCount,
+        COUNT(u.id) AS totalWarehouseUsers
+      FROM Warehouses w
+      LEFT JOIN Users u ON w.id = u.warehouse_id
+      GROUP BY w.name
+      ORDER BY w.name ASC
+    `;
+    const warehouseUserRes = await pool.request().query(warehouseUserQuery);
+
+    // 7. Detailed Complaints Data Table (Org-Wide)
+    const reqDetails = pool.request();
+    const dateClauseDetails = this.getDateRangeClause(period, startDate, endDate, reqDetails, 'c');
+    const detailsQuery = `
+      SELECT 
+        c.id,
+        c.complaint_number,
+        c.customer_code,
+        c.invoice_number,
+        ct.name AS type,
+        ISNULL(cs.name, 'General') AS subtype,
+        w.name AS warehouse_name,
+        (u_sales.first_name + ' ' + u_sales.last_name) AS raisedBy,
+        ISNULL(u_team.first_name + ' ' + u_team.last_name, 'Unclaimed') AS claimedBy,
+        CONVERT(VARCHAR(20), c.raised_at, 106) AS raised_date,
+        c.status,
+        CASE WHEN c.escalated_to_manager_at IS NOT NULL THEN 'Yes' ELSE 'No' END AS isEscalated,
+        CONVERT(VARCHAR(20), c.escalated_to_manager_at, 106) AS escalated_date,
+        CASE WHEN c.status IN ('Resolved', 'Completed') THEN CONVERT(VARCHAR(20), c.updated_at, 106) ELSE 'N/A' END AS resolved_date
+      FROM Complaints c
+      JOIN Warehouses w ON c.warehouse_id = w.id
+      JOIN Users u_sales ON c.sales_executive_id = u_sales.id
+      LEFT JOIN Users u_team ON u_team.id = ISNULL(c.taken_action_by, c.assigned_warehouse_team_id)
+      JOIN ComplaintTypes ct ON c.complaint_type_id = ct.id
+      LEFT JOIN ComplaintSubtypes cs ON c.complaint_subtype_id = cs.id
+      WHERE 1=1 ${dateClauseDetails}
+      ORDER BY c.raised_at DESC
+    `;
+    const detailsRes = await reqDetails.query(detailsQuery);
+
+    return {
+      summary: {
+        totalComplaints,
+        pendingCount: s.pendingCount || 0,
+        inProgressCount: s.inProgressCount || 0,
+        resolvedCount: totalResolved,
+        openCount: s.openCount || 0,
+        currentlyEscalatedCount,
+        totalEverEscalated,
+        totalEscalated: currentlyEscalatedCount,
+        unresolvedEscalatedCount: globalEscalationQueue.length,
+        activeEscalationRate,
+        historicalEscalationRate,
+        escalationRate: activeEscalationRate,
+        avgResolutionDisplay,
+        slaPerformanceRate
+      },
+      warehouseComparison,
+      salesExecutivePerformance,
+      globalEscalationQueue,
+      statusBreakdown: statusRes.recordset,
+      subtypeBreakdown: typeRes.recordset,
+      mostCommonIssue: this.calculateMostCommonIssue(typeRes.recordset),
+      agingBuckets,
+      slaBreachTrend: trendRes.recordset,
+      trendGrouping: isShortRange ? 'daily' : 'weekly',
+      userManagementSummary: {
+        roleBreakdown: userRoleRes.recordset,
+        warehouseUserBreakdown: warehouseUserRes.recordset
+      },
+      detailedComplaints: detailsRes.recordset
+    };
+  }
 }
 
 module.exports = ReportRepository;

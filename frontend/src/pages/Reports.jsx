@@ -46,9 +46,15 @@ const Reports = () => {
     setError('');
     try {
       let endpoint = '/reports/sales-executive';
-      if (role === 'Sales Executive') {
+      if (role === 'Administrator' || role === 'Admin') {
+        endpoint = '/reports/admin';
+      } else if (role === 'Sales Executive') {
         endpoint = '/reports/sales-executive';
-      } else if (role === 'Warehouse Team' || role === 'Warehouse Manager' || role === 'Manager' || role === 'Administrator' || role === 'Admin') {
+      } else if (role === 'Warehouse Team') {
+        endpoint = '/reports/warehouse-team';
+      } else if (role === 'Warehouse Manager' || role === 'Manager') {
+        endpoint = '/reports/warehouse-manager';
+      } else {
         endpoint = '/reports/warehouse';
       }
 
@@ -693,7 +699,7 @@ const Reports = () => {
             {/* ───────────────────────────────────────────────────────────── */}
             {/* 3. WAREHOUSE MANAGER REPORT VIEW                              */}
             {/* ───────────────────────────────────────────────────────────── */}
-            {(role === 'Warehouse Manager' || role === 'Manager' || role === 'Administrator' || role === 'Admin') && reportData.summary && (
+            {(role === 'Warehouse Manager' || role === 'Manager') && reportData.summary && (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                   <StatSummaryCard title="Total Complaints" value={reportData.summary.totalComplaints} icon={<Building2 size={18} />} color="blue" />
@@ -910,6 +916,334 @@ const Reports = () => {
                   </div>
                 </div>
 
+                <DetailedComplaintsSection complaints={reportData.detailedComplaints || []} role={role} />
+              </>
+            )}
+
+            {/* ───────────────────────────────────────────────────────────── */}
+            {/* 4. ADMINISTRATOR / GLOBAL EXECUTIVE REPORT VIEW               */}
+            {/* ───────────────────────────────────────────────────────────── */}
+            {(role === 'Administrator' || role === 'Admin') && reportData.summary && (
+              <>
+                {/* Section Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div>
+                    <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Building2 size={20} style={{ color: 'var(--brand-primary)' }} />
+                      Organization-Wide Executive Dashboard
+                    </h2>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                      Global oversight across all 5 warehouses, Sales Executives, and escalation queues.
+                    </p>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', borderRadius: '12px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6' }}>
+                    Global Org Scope
+                  </span>
+                </div>
+
+                {/* Section 1: Org-Wide Summary Stat Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                  <StatSummaryCard title="Total Complaints (Org)" value={reportData.summary.totalComplaints} icon={<Building2 size={18} />} color="blue" />
+                  <StatSummaryCard title="Pending / Open" value={reportData.summary.openCount || reportData.summary.pendingCount} icon={<Clock size={18} />} color="amber" />
+                  <StatSummaryCard title="In Progress" value={reportData.summary.inProgressCount} icon={<RefreshCw size={18} />} color="purple" />
+                  <StatSummaryCard title="Resolved (Org)" value={reportData.summary.resolvedCount} icon={<CheckCircle2 size={18} />} color="green" />
+                  <StatSummaryCard title="Currently Escalated (Open)" value={reportData.summary.currentlyEscalatedCount} icon={<ShieldAlert size={18} />} color="red" />
+                  <StatSummaryCard title="Ever Escalated (Historical)" value={reportData.summary.totalEverEscalated} icon={<ShieldAlert size={18} />} color="amber" />
+                  <StatSummaryCard title="Active Escalation Rate" value={`${reportData.summary.activeEscalationRate}%`} icon={<AlertTriangle size={18} />} color="red" />
+                  <StatSummaryCard title="Historical Escalation Rate" value={`${reportData.summary.historicalEscalationRate}%`} icon={<AlertTriangle size={18} />} color="amber" />
+                  <StatSummaryCard title="Avg Resolution Time" value={typeof reportData.summary.avgResolutionDisplay === 'string' ? reportData.summary.avgResolutionDisplay : `${reportData.summary.avgResolutionDisplay} hrs`} icon={<Clock size={18} />} color="purple" />
+                  <StatSummaryCard title="Org SLA Compliance" value={`${reportData.summary.slaPerformanceRate}%`} icon={<TrendingUp size={18} />} color={parseInt(reportData.summary.slaPerformanceRate) >= 80 ? 'green' : 'red'} />
+                  <StatSummaryCard title="Most Common Issue (Org)" value={reportData.mostCommonIssue?.display || 'N/A'} icon={<AlertCircle size={18} />} color="amber" />
+                </div>
+
+                {/* Section 2: Warehouse-vs-Warehouse Comparison Table (Core Feature) */}
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', margin: '20px 0 0 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <BarChart3 size={18} style={{ color: 'var(--brand-primary)' }} />
+                      Warehouse-vs-Warehouse Performance Comparison
+                    </h3>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Side-by-side metrics across all 5 warehouses
+                    </span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }} className="scrollbar-thin">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left', minWidth: '920px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '10px' }}>Warehouse</th>
+                          <th style={{ padding: '10px' }}>Location</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Total Complaints</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Resolved</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Currently Escalated</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Ever Escalated</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Pending</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Active Esc. Rate</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Avg Resolution Time</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>SLA Performance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(reportData.warehouseComparison || []).map((wh) => (
+                          <tr key={wh.warehouseId} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '10px', fontWeight: '700', color: 'var(--text-primary)' }}>{wh.warehouseName}</td>
+                            <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{wh.location || 'N/A'}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: 'var(--brand-primary)' }}>{wh.totalComplaints}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#10B981' }}>{wh.resolvedCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: wh.currentlyEscalatedCount > 0 ? '#EF4444' : 'var(--text-muted)' }}>{wh.currentlyEscalatedCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#F59E0B' }}>{wh.totalEverEscalated}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#F59E0B' }}>{wh.pendingCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: parseInt(wh.activeEscalationRate) > 30 ? '#EF4444' : 'var(--text-primary)' }}>{wh.activeEscalationRate}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', color: 'var(--text-secondary)' }}>{wh.avgResolutionDisplay}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: parseInt(wh.slaPerformance) >= 80 ? '#10B981' : '#EF4444' }}>{wh.slaPerformance}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Section 4: Global Escalation Oversight Queue */}
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', margin: '20px 0 0 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <ShieldAlert size={18} style={{ color: '#EF4444' }} />
+                      Global Escalation Oversight Queue (Unresolved Across All Warehouses)
+                    </h3>
+                    <span 
+                      style={{ 
+                        fontSize: '12px', 
+                        fontWeight: '600', 
+                        padding: '4px 10px', 
+                        borderRadius: '12px', 
+                        backgroundColor: (reportData.globalEscalationQueue || []).length > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', 
+                        color: (reportData.globalEscalationQueue || []).length > 0 ? '#EF4444' : '#10B981' 
+                      }}
+                    >
+                      {(reportData.globalEscalationQueue || []).length} Pending Escalation{(reportData.globalEscalationQueue || []).length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  {(reportData.globalEscalationQueue || []).length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px border-dashed var(--border-color)' }}>
+                      <CheckCircle2 size={32} style={{ color: '#10B981', margin: '0 auto 8px auto' }} />
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#10B981' }}>
+                        Zero Pending Escalations Across All Warehouses
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        All escalated complaints in the organization have been addressed! No items pending manager action.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }} className="scrollbar-thin">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left', minWidth: '850px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                            <th style={{ padding: '10px' }}>Complaint ID</th>
+                            <th style={{ padding: '10px' }}>Warehouse</th>
+                            <th style={{ padding: '10px' }}>Manager</th>
+                            <th style={{ padding: '10px' }}>Customer</th>
+                            <th style={{ padding: '10px' }}>Type / Subtype</th>
+                            <th style={{ padding: '10px' }}>Escalated From</th>
+                            <th style={{ padding: '10px' }}>Escalated Date</th>
+                            <th style={{ padding: '10px' }}>Waiting Time</th>
+                            <th style={{ padding: '10px' }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.globalEscalationQueue || []).map((item) => (
+                            <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '10px', fontWeight: '700', color: 'var(--brand-primary)' }}>{item.complaint_number}</td>
+                              <td style={{ padding: '10px', fontWeight: '600', color: 'var(--text-primary)' }}>{item.warehouseName}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{item.managerName}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-primary)' }}>{item.customer_code}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-primary)' }}>
+                                <span style={{ fontWeight: '500' }}>{item.type}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>{item.subtype}</span>
+                              </td>
+                              <td style={{ padding: '10px', fontWeight: '600', color: 'var(--text-primary)' }}>{item.escalatedFrom}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{item.escalatedDate}</td>
+                              <td style={{ padding: '10px', fontWeight: '700', color: '#EF4444' }}>{item.waitingTimeDisplay}</td>
+                              <td style={{ padding: '10px' }}>
+                                <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444' }}>
+                                  {item.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3: Sales Executive Performance Breakdown */}
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', margin: '20px 0 0 0' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px' }}>
+                    Sales Executive Activity & Resolution Breakdown
+                  </h3>
+                  <div style={{ overflowX: 'auto' }} className="scrollbar-thin">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left', minWidth: '850px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '10px' }}>Sales Executive</th>
+                          <th style={{ padding: '10px' }}>Email</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Complaints Raised</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Primary Destination Warehouse</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Resolved</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Currently Escalated</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Ever Escalated</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Pending</th>
+                          <th style={{ padding: '10px', textAlign: 'center' }}>Resolution Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(reportData.salesExecutivePerformance || []).map((exec) => (
+                          <tr key={exec.executiveId} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '10px', fontWeight: '600', color: 'var(--text-primary)' }}>{exec.executiveName}</td>
+                            <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{exec.email}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: 'var(--brand-primary)' }}>{exec.raisedCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', color: 'var(--text-secondary)' }}>{exec.primaryWarehouse}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#10B981' }}>{exec.resolvedCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: exec.currentlyEscalatedCount > 0 ? '#EF4444' : 'var(--text-muted)' }}>{exec.currentlyEscalatedCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#F59E0B' }}>{exec.totalEverEscalated}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#F59E0B' }}>{exec.pendingCount}</td>
+                            <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: 'var(--brand-primary)' }}>{exec.resolutionRate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Section 5: Org-Wide Trend & Pattern Analysis Charts */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '20px' }}>
+                  {/* Status Breakdown */}
+                  <ChartCard title="Org-Wide Complaint Status Breakdown">
+                    {reportData.statusBreakdown && reportData.statusBreakdown.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <PieChart margin={{ top: 15, bottom: 15, left: 10, right: 10 }}>
+                          <Pie data={reportData.statusBreakdown} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius={40} outerRadius={65} paddingAngle={4}>
+                            {reportData.statusBreakdown.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
+                          <Legend verticalAlign="bottom" height={40} formatter={(value, entry) => `${value}: ${entry?.payload?.value || 0}`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : <EmptyStateText message="No status data for selected date range" />}
+                  </ChartCard>
+
+                  {/* Subtype Analysis */}
+                  <ChartCard title="Org-Wide Subtype Analysis">
+                    {reportData.subtypeBreakdown && reportData.subtypeBreakdown.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={reportData.subtypeBreakdown} margin={{ bottom: 25, top: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
+                          <XAxis dataKey="subtypeName" stroke={chartTextColor} fontSize={10} interval={0} angle={-20} textAnchor="end" height={45} />
+                          <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} />
+                          <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
+                          <Bar dataKey="count" name="Count" fill="var(--brand-primary)" radius={[4, 4, 0, 0]} barSize={16} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : <EmptyStateText message="No subtype data for selected date range" />}
+                  </ChartCard>
+
+                  {/* SLA Breach Trend */}
+                  <ChartCard title={`Org-Wide SLA Breach Trend (${reportData.trendGrouping === 'daily' ? 'Grouped Daily' : 'Grouped Weekly'})`}>
+                    {reportData.slaBreachTrend && reportData.slaBreachTrend.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={reportData.slaBreachTrend} margin={{ top: 15, right: 20, left: 0, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
+                          <XAxis dataKey="label" stroke={chartTextColor} fontSize={11} />
+                          <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} domain={[0, (dataMax) => Math.max(dataMax + 1, 4)]} />
+                          <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
+                          <Line type="monotone" dataKey="breachCount" name="SLA Breaches" stroke="#EF4444" strokeWidth={3} dot={{ r: 4 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : <EmptyStateText message="No SLA breach incidents in selected date range" />}
+                  </ChartCard>
+                </div>
+
+                {/* Open Complaint Aging Distribution */}
+                <ChartCard title="Org-Wide Open Complaint Aging Distribution">
+                  {reportData.agingBuckets && reportData.agingBuckets.some(b => b.count > 0) ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={reportData.agingBuckets} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
+                        <XAxis dataKey="bucket" stroke={chartTextColor} fontSize={11} />
+                        <YAxis stroke={chartTextColor} fontSize={11} allowDecimals={false} />
+                        <Tooltip contentStyle={{ backgroundColor: chartTooltipBg, borderColor: chartTooltipBorder, borderRadius: '8px' }} />
+                        <Bar dataKey="count" name="Open Complaints" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={24} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ padding: '24px', textAlign: 'center', color: '#10B981', fontWeight: '600', fontSize: '13px' }}>
+                      All complaints across all warehouses are resolved! Zero open overdue complaints.
+                    </div>
+                  )}
+                </ChartCard>
+
+                {/* Section 6: User & Role Management Visibility */}
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', margin: '20px 0 0 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+                      System User & Role Management Visibility
+                    </h3>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Note: User Management visibility embedded in Admin Executive Dashboard.
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <h4 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '10px' }}>User Counts by System Role</h4>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                            <th style={{ padding: '6px' }}>Role</th>
+                            <th style={{ padding: '6px', textAlign: 'center' }}>Total</th>
+                            <th style={{ padding: '6px', textAlign: 'center' }}>Active</th>
+                            <th style={{ padding: '6px', textAlign: 'center' }}>Inactive</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.userManagementSummary?.roleBreakdown || []).map((r, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '6px', fontWeight: '600', color: 'var(--text-primary)' }}>{r.role}</td>
+                              <td style={{ padding: '6px', textAlign: 'center', fontWeight: '700', color: 'var(--brand-primary)' }}>{r.totalUsers}</td>
+                              <td style={{ padding: '6px', textAlign: 'center', color: '#10B981' }}>{r.activeUsers}</td>
+                              <td style={{ padding: '6px', textAlign: 'center', color: '#EF4444' }}>{r.inactiveUsers}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div>
+                      <h4 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '10px' }}>Team Member Distribution per Warehouse</h4>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                            <th style={{ padding: '6px' }}>Warehouse</th>
+                            <th style={{ padding: '6px', textAlign: 'center' }}>Team Members</th>
+                            <th style={{ padding: '6px', textAlign: 'center' }}>Managers</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(reportData.userManagementSummary?.warehouseUserBreakdown || []).map((w, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '6px', fontWeight: '600', color: 'var(--text-primary)' }}>{w.warehouseName}</td>
+                              <td style={{ padding: '6px', textAlign: 'center', fontWeight: '600', color: 'var(--brand-primary)' }}>{w.teamMemberCount}</td>
+                              <td style={{ padding: '6px', textAlign: 'center', color: 'var(--text-secondary)' }}>{w.managerCount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 7: Detailed Complaints Data Table (Org-Wide) */}
                 <DetailedComplaintsSection complaints={reportData.detailedComplaints || []} role={role} />
               </>
             )}

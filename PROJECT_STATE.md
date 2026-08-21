@@ -320,6 +320,20 @@ Below is the SQL Server schema defining the tables and relations:
     5. **`CMP-0019`**: `warehouse_team_deadline` was 2 hours before `raised_at` $\rightarrow$ Set to `2026-08-12 10:19:28` (+24h SLA).
   - *Note*: These 5 records are test/seed entries (`CUST-TEST-*`, synthetic test data). The corrections were database data cleanup, not changes to real production complaint history.
   - *Future Seed Script Recommendation*: All future test/seed generator scripts and mock data ingestion pipelines MUST enforce timestamp sequence validation (`raised_at < warehouse_team_deadline <= warehouse_team_responded_at / escalated_to_manager_at`) prior to SQL insertion to prevent data corruption.
+### 2026-08-21
+- **Admin Executive Report Dashboard (`report.repository.js`, `report.controller.js`, `report.routes.js`, `Reports.jsx`)**:
+  - **Additive Backend Architecture**: Added `getAdminReport` method to `ReportRepository`, `/reports/admin` endpoint route, and `getAdminReport` controller action. Zero edits made to existing Sales Exec, Warehouse Team, or Manager report functions.
+  - **7 Core Dashboard Sections**:
+    1. **Org-Wide Summary**: 9 KPI cards aggregating metrics across all 5 warehouses (`totalComplaints`, `pendingCount`, `inProgressCount`, `resolvedCount`, `totalEscalated`, `escalationRate`, `avgResolutionDisplay`, `slaPerformanceRate`, `mostCommonIssue`).
+    2. **Warehouse-vs-Warehouse Comparison**: Side-by-side performance table for all 5 warehouses comparing Total Complaints, Resolved, Escalated, Pending, Escalation Rate %, Avg Resolution Time, and SLA Performance %.
+    3. **Sales Executive Performance Breakdown**: Per-Sales-Executive tracking of complaints raised, primary destination warehouse, resolved/escalated/pending counts, and resolution success rate.
+    4. **Global Escalation Oversight Queue**: Org-wide unresolved escalation worklist sorted oldest-first (`ORDER BY c.escalated_to_manager_at ASC`), displaying warehouse name, assigned manager, escalated from team member, escalated date, and waiting time. Handles clean zero-escalation empty state.
+    5. **Org-Wide Trend & Pattern Analysis**: Status pie chart, subtype bar chart, dynamic SLA breach trend line chart (daily/weekly), and open complaint aging distribution.
+    6. **User & Role Management Visibility**: User counts by role (Active vs Inactive) and team member distribution per warehouse embedded directly into the Admin Executive Dashboard.
+    7. **Data Consistency Bug Fixes & Verification**:
+       - **Bug 1 (Escalation Disambiguation)**: Separated `Currently Escalated (Open)` (5) from `Ever Escalated (Historical)` (14). Added `Active Escalation Rate` (28%) alongside `Historical Escalation Rate` (78%). Updated summary cards, Warehouse Comparison Table, and Sales Executive Table with explicit dual escalation columns matching the Global Escalation Queue (5).
+       - **Bug 2 (Comprehensive SLA Calculation)**: Fixed SLA performance calculation logic in `getAdminReport` to evaluate open complaints against their 24h SLA deadline instead of ignoring open complaints. Salem Warehouse and Erode Warehouse now correctly show `0%` SLA performance (both have open complaints escalated for 280+ hours), Coimbatore shows `60%` (3 compliant / 5 total), and Org-Wide SLA Compliance correctly reflects `61%` (11 compliant / 18 total). Chennai Warehouse preserves vacuous compliance (`100%` for 0 complaints).
+       - **Verification**: Verified via direct SQL queries and captured fresh Playwright Chrome screenshots (`admin_report_month.png` and `admin_report_all_time.png`). Zero files written to `C:\`.
 ### 2026-08-20
 - **Warehouse Manager Report Audit & Manager Action Queue Implementation (`report.repository.js` & `Reports.jsx`)**:
   - **Audit Findings**: Completed 6-point audit. Identified that item #3 ("Manager's own action queue") was missing from both API payload and UI view.
