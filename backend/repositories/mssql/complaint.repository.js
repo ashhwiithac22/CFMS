@@ -88,6 +88,19 @@ class ComplaintRepository {
       `);
     const assignedTeamId = teamRes.recordset[0]?.id || null;
 
+    // Fetch dynamic SLA window from SystemSettings (default to 24 if missing)
+    let slaWindowHours = 24;
+    try {
+      const settingRes = await pool.request().query(`
+        SELECT setting_value FROM SystemSettings WHERE setting_key = 'sla_window_hours'
+      `);
+      if (settingRes.recordset.length > 0 && !isNaN(parseInt(settingRes.recordset[0].setting_value, 10))) {
+        slaWindowHours = parseInt(settingRes.recordset[0].setting_value, 10);
+      }
+    } catch (e) {
+      slaWindowHours = 24;
+    }
+
     // 3. Insert Complaint into database
     const insertRes = await pool.request()
       .input('complaint_number', sql.VarChar, complaintNumber)
@@ -100,6 +113,7 @@ class ComplaintRepository {
       .input('description', sql.NVarChar, data.description)
       .input('attachment_url', sql.VarChar, data.attachment_url || null)
       .input('assigned_team_id', sql.Int, assignedTeamId)
+      .input('sla_hours', sql.Int, slaWindowHours)
       .query(`
         INSERT INTO Complaints (
           complaint_number, sales_executive_id, warehouse_id, customer_code, invoice_number, 
@@ -110,7 +124,7 @@ class ComplaintRepository {
         VALUES (
           @complaint_number, @sales_executive_id, @warehouse_id, @customer_code, @invoice_number, 
           @complaint_type_id, @complaint_subtype_id, @description, @attachment_url, 'Assigned', 
-          @assigned_team_id, GETDATE(), DATEADD(hour, 24, GETDATE())
+          @assigned_team_id, GETDATE(), DATEADD(hour, @sla_hours, GETDATE())
         )
       `);
 

@@ -31,6 +31,22 @@ class AuditRepository {
       `);
     return result.recordset;
   }
+
+  async findRecent(limit = 15) {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('limit', sql.Int, limit)
+      .query(`
+        SELECT TOP (@limit) a.id, a.user_id, a.action, a.ip_address, a.user_agent, a.details, a.timestamp,
+               ISNULL(u.first_name + ' ' + u.last_name, 'System') AS user_name,
+               ISNULL(u.role, 'System') AS user_role,
+               u.email AS user_email
+        FROM AuditLogs a
+        LEFT JOIN Users u ON a.user_id = u.id
+        ORDER BY a.timestamp DESC
+      `);
+    return result.recordset;
+  }
 }
 
 module.exports = AuditRepository;

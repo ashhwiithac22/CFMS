@@ -320,7 +320,22 @@ Below is the SQL Server schema defining the tables and relations:
     5. **`CMP-0019`**: `warehouse_team_deadline` was 2 hours before `raised_at` $\rightarrow$ Set to `2026-08-12 10:19:28` (+24h SLA).
   - *Note*: These 5 records are test/seed entries (`CUST-TEST-*`, synthetic test data). The corrections were database data cleanup, not changes to real production complaint history.
   - *Future Seed Script Recommendation*: All future test/seed generator scripts and mock data ingestion pipelines MUST enforce timestamp sequence validation (`raised_at < warehouse_team_deadline <= warehouse_team_responded_at / escalated_to_manager_at`) prior to SQL insertion to prevent data corruption.
-### 2026-08-21
+- **Admin Operational Dashboard & Settings Suite Implementation (`admin.repository.js`, `admin.controller.js`, `admin.routes.js`, `Dashboard.jsx`, `Settings.jsx`, `SystemSettings` table)**:
+  - **Replaced Stale Placeholders**: Entirely replaced the outdated "Admin Control Center coming soon" placeholder in both `Dashboard.jsx` and `Settings.jsx` with distinct, feature-complete operational and administrative interfaces.
+  - **Part 1: Operational Dashboard (`Dashboard.jsx` -> `AdminDashboardView`)**:
+    - **Quick Health Snapshot**: Real-time KPI cards for Active Open Complaints (5), Breaching SLA Right Now (5), Warehouses $\le 50\%$ SLA (2), and Total Active Users (40).
+    - **Action-Needed Feed**: Surfaced long-escalated complaints ($>3$ days waiting) and 0% SLA warehouses (Salem, Erode).
+    - **Recent Activity Feed**: Pulls top 15 entries from `AuditLogs` showing timestamp, user name, role, action, IP, and details.
+    - **Quick Links**: Direct navigation to User Management, Executive Reports, Warehouse Management, and SLA Configuration.
+  - **Part 2: Admin Settings Suite (`Settings.jsx`)**:
+    - **Tab A: User Management**: Full user listing with search/role/warehouse filters. Modal to create new users (with password complexity validation), edit user roles/warehouses, toggle Active/Inactive status (`status = 'Inactive'` blocks login with HTTP 401 while preserving all historical data), and admin password reset.
+    - **Tab B: Warehouse Management**: Warehouse listing with team member, manager, and complaint counts. Add/edit modals and protected deletion (blocks deleting warehouses with linked users/complaints with HTTP 400).
+    - **Tab C: Complaint Categories**: Dynamic management of ComplaintTypes and ComplaintSubtypes (automatically feeds `RaiseComplaint` form dropdowns).
+    - **Tab D: Dynamic SLA Configuration**: Exposed standard SLA window (`sla_window_hours`) and alert thresholds in new `SystemSettings` database table. Updated `ComplaintRepository.create` to calculate `warehouse_team_deadline` based on dynamic SLA setting without retroactively altering existing complaints.
+    - **Tab E: Theme Preference**: Dark/Light mode toggle.
+  - **Server-Side Security**: All `/api/admin/*` endpoints strictly protected by `authMiddleware` and `adminMiddleware` (restricting access to `Administrator` role only, returning HTTP 403 Forbidden for non-admin tokens).
+  - **Verification & Workspace Integrity**: Passed all 8 mandatory automated test suites (`verify_admin_dashboard_and_settings.js`) and captured Playwright Chrome screenshots (`admin_dashboard_operational.png`, `admin_settings_users.png`, `admin_settings_warehouses.png`, `admin_settings_sla.png`). Zero files written to `C:\`.
+### 2026-08-21 (Earlier)
 - **Admin Executive Report Dashboard (`report.repository.js`, `report.controller.js`, `report.routes.js`, `Reports.jsx`)**:
   - **Additive Backend Architecture**: Added `getAdminReport` method to `ReportRepository`, `/reports/admin` endpoint route, and `getAdminReport` controller action. Zero edits made to existing Sales Exec, Warehouse Team, or Manager report functions.
   - **7 Core Dashboard Sections**:

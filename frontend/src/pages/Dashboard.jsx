@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Settings from './Settings';
 import { 
-  FileSpreadsheet, Clock, RefreshCw, ShieldAlert, CheckSquare, BarChart3
+  FileSpreadsheet, Clock, RefreshCw, ShieldAlert, CheckSquare, BarChart3,
+  Users, AlertTriangle, Activity, ArrowRight, Building2, Layers
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
@@ -14,6 +16,225 @@ import ComplaintsTable from '../components/ComplaintsTable';
 import MessagePanel from '../components/MessagePanel';
 import Reports from './Reports';
 import { api } from '../services/api';
+
+const AdminDashboardView = ({ onNavigateTab }) => {
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAdminDashboard = async () => {
+      try {
+        const res = await api.get('/admin/dashboard');
+        if (res.ok) {
+          const json = await res.json();
+          setDashboardData(json.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch admin operational dashboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAdminDashboard();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', fontWeight: '500' }}>
+        Loading Admin Operational Dashboard...
+      </div>
+    );
+  }
+
+  const { snapshot = {}, actionFeed = {}, recentAuditLogs = [] } = dashboardData || {};
+
+  return (
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Header */}
+      <div>
+        <h1 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+          System Operational Dashboard
+        </h1>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+          Real-time operational snapshot, critical action feeds, and recent audit activity logs.
+        </p>
+      </div>
+
+      {/* 1. Quick Health Snapshot Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Open Complaints</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: 'var(--brand-primary)', margin: '8px 0 4px 0' }}>{snapshot.totalActiveComplaints}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Currently unresolved org-wide</div>
+        </div>
+
+        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid #EF4444' }}>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: '#EF4444', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <AlertTriangle size={14} /> Breaching SLA Right Now
+          </div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#EF4444', margin: '8px 0 4px 0' }}>{snapshot.breachingSlaCount}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Past deadline & unresolved</div>
+        </div>
+
+        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Warehouses ≤ 50% SLA</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: snapshot.lowSlaWarehouseCount > 0 ? '#F59E0B' : '#10B981', margin: '8px 0 4px 0' }}>{snapshot.lowSlaWarehouseCount}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Locations needing attention</div>
+        </div>
+
+        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Active Users</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: '#10B981', margin: '8px 0 4px 0' }}>{snapshot.totalActiveUsers}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Active system accounts</div>
+        </div>
+      </div>
+
+      {/* 2. Action-Needed Feed */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '20px' }}>
+        {/* Long Escalated Complaints */}
+        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert size={18} style={{ color: '#EF4444' }} />
+            Complaints Escalated & Unresolved &gt; 3 Days
+          </h3>
+          {(!actionFeed.longEscalated || actionFeed.longEscalated.length === 0) ? (
+            <div style={{ padding: '20px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '13px', color: '#10B981', fontWeight: '600' }}>
+              Zero complaints waiting &gt; 3 days!
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                    <th style={{ padding: '8px' }}>Complaint ID</th>
+                    <th style={{ padding: '8px' }}>Warehouse</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Days Waiting</th>
+                    <th style={{ padding: '8px' }}>Escalated Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {actionFeed.longEscalated.map(item => (
+                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '8px', fontWeight: '700', color: 'var(--brand-primary)' }}>{item.complaint_number}</td>
+                      <td style={{ padding: '8px', color: 'var(--text-primary)' }}>{item.warehouseName}</td>
+                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: '700', color: '#EF4444' }}>{item.daysWaiting} days</td>
+                      <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{item.escalatedDate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Warehouses at 0% SLA */}
+        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={18} style={{ color: '#F59E0B' }} />
+            Critical Warehouses (0% SLA Performance)
+          </h3>
+          {(!actionFeed.zeroSlaWarehouses || actionFeed.zeroSlaWarehouses.length === 0) ? (
+            <div style={{ padding: '20px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '13px', color: '#10B981', fontWeight: '600' }}>
+              No warehouses at 0% SLA performance!
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {actionFeed.zeroSlaWarehouses.map(wh => (
+                <div key={wh.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px' }}>
+                  <div>
+                    <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>{wh.warehouseName}</div>
+                    <div style={{ fontSize: '12px', color: '#EF4444', fontWeight: '600' }}>0% Compliant ({wh.total} active complaints breached)</div>
+                  </div>
+                  <button onClick={() => onNavigateTab('Reports')} style={{ padding: '6px 12px', borderRadius: '6px', backgroundColor: '#EF4444', color: '#FFF', fontSize: '12px', fontWeight: '600', border: 'none', cursor: 'pointer' }}>
+                    View Report
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Recent System Activity Feed */}
+      <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Activity size={18} style={{ color: 'var(--brand-primary)' }} />
+          Recent System Audit Trail Logs
+        </h3>
+        <div style={{ overflowX: 'auto' }} className="scrollbar-thin">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left', minWidth: '750px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                <th style={{ padding: '10px' }}>Timestamp</th>
+                <th style={{ padding: '10px' }}>User</th>
+                <th style={{ padding: '10px' }}>Role</th>
+                <th style={{ padding: '10px' }}>Action</th>
+                <th style={{ padding: '10px' }}>IP Address</th>
+                <th style={{ padding: '10px' }}>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!recentAuditLogs || recentAuditLogs.length === 0) ? (
+                <tr>
+                  <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No audit log records recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                recentAuditLogs.map(log => (
+                  <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {new Date(log.timestamp).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '10px', fontWeight: '600', color: 'var(--text-primary)' }}>{log.user_name}</td>
+                    <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{log.user_role}</td>
+                    <td style={{ padding: '10px' }}>
+                      <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', backgroundColor: 'var(--bg-secondary)', color: 'var(--brand-primary)' }}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{log.ip_address}</td>
+                    <td style={{ padding: '10px', color: 'var(--text-primary)' }}>{log.details || '-'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 4. Quick Links to Admin Actions */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+        <button
+          onClick={() => onNavigateTab('Settings')}
+          style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
+        >
+          <Users size={20} style={{ color: 'var(--brand-primary)' }} />
+          <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>User Management</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Create, edit roles, deactivate users</div>
+        </button>
+
+        <button
+          onClick={() => onNavigateTab('Reports')}
+          style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
+        >
+          <BarChart3 size={20} style={{ color: '#10B981' }} />
+          <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>Executive Reports</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Org-wide trends & warehouse comparison</div>
+        </button>
+
+        <button
+          onClick={() => onNavigateTab('Settings')}
+          style={{ padding: '16px', borderRadius: '10px', backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '8px' }}
+        >
+          <Building2 size={20} style={{ color: '#F59E0B' }} />
+          <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-primary)' }}>Warehouse Facilities</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Add/edit warehouses and staff scoping</div>
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -671,6 +892,8 @@ const [unreadCount, setUnreadCount] = useState(0);
             </div>
           ) : activeTab === 'Reports' ? (
             <Reports />
+          ) : activeTab === 'Settings' ? (
+            <Settings />
           ) : activeTab === 'My Complaints' || activeTab === 'Escalated Complaints' ? (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {/* Header */}
@@ -755,33 +978,7 @@ const [unreadCount, setUnreadCount] = useState(0);
           ) : (
           /* ─────────────────────────────── DASHBOARD VIEW ─────────────────────────────── */
           user?.role === 'Administrator' ? (
-            <div 
-              className="animate-fade-in"
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                minHeight: '400px',
-                backgroundColor: 'var(--bg-primary)',
-                borderRadius: '12px',
-                border: '1px solid var(--border-color)',
-                padding: '48px',
-                textAlign: 'center',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                margin: '24px 0',
-                width: '100%',
-                boxSizing: 'border-box'
-              }}
-            >
-              <BarChart3 size={48} style={{ color: 'var(--brand-primary)', marginBottom: '16px', opacity: 0.8 }} />
-              <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px 0' }}>
-                Admin Control Center
-              </h2>
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '400px', margin: 0 }}>
-                Reports and complaint oversight tools coming soon.
-              </p>
-            </div>
+            <AdminDashboardView onNavigateTab={setActiveTab} />
           ) : (
           <>
           <div className="animate-fade-in">

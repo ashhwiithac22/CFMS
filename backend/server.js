@@ -54,12 +54,15 @@ app.use('/api/', (req, res, next) => {
 
 const complaintRoutes = require('./routes/complaint.routes');
 const reportRoutes = require('./routes/report.routes');
+const adminRoutes = require('./routes/admin.routes');
+const adminRepository = require('./repositories/mssql/admin.repository');
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check & root endpoints
 app.get('/', (req, res) => {
@@ -132,6 +135,7 @@ async function startServer() {
     // Connect to database and run schema/seeds
     try {
       await connectDB();
+      await adminRepository.ensureSettingsTable();
     } catch (dbErr) {
       if (process.env.ALLOW_MOCK_DB === 'true') {
         console.warn('===================================================================');
